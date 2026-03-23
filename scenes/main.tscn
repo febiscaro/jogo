@@ -16,7 +16,7 @@ color = Color(0.7, 0.76, 0.66, 1)
 polygon = PackedVector2Array(0, 430, 1280, 430, 1280, 720, 0, 720)
 
 [node name="Wall" type="Node2D" parent="." unique_id=1062166686]
-position = Vector2(250, 95)
+position = Vector2(300, 95)
 script = ExtResource("3_l2wns")
 
 [node name="Player" parent="." unique_id=836326921 instance=ExtResource("1_vah6k")]
@@ -28,7 +28,7 @@ position = Vector2(640, 595)
 self_modulate = Color(0.94, 0.95, 0.96, 0.88)
 offset_left = 18.0
 offset_top = 18.0
-offset_right = 220.0
+offset_right = 260.0
 offset_bottom = 702.0
 
 [node name="Title" type="Label" parent="UI/Sidebar" unique_id=1538614396]
@@ -120,16 +120,16 @@ No fim do tempo, mantenha o muro bonito."
 autowrap_mode = 3
 
 [node name="TopStatus" type="Label" parent="UI" unique_id=1070277644]
-offset_left = 250.0
+offset_left = 300.0
 offset_top = 20.0
-offset_right = 1070.0
+offset_right = 1220.0
 offset_bottom = 52.0
 text = "Mantenha o muro acima de 70%"
 horizontal_alignment = 1
 
 [node name="CenterMessage" type="Label" parent="UI" unique_id=185559425]
-offset_left = 250.0
+offset_left = 300.0
 offset_top = 665.0
-offset_right = 1070.0
+offset_right = 1220.0
 offset_bottom = 705.0
 horizontal_alignment = 1

@@ -34,6 +34,9 @@ const MULTIPLIER_KEYS = [
 @onready var swatch_green: ColorRect = $UI/Sidebar/SwatchGreen
 @onready var swatch_purple: ColorRect = $UI/Sidebar/SwatchPurple
 
+var _palette: Array[Color] = []
+var _selected_color_index: int = 0
+
 var money_value: Label
 var day_value: Label
 var streak_value: Label
@@ -82,6 +85,7 @@ var _meta_total_credits: int = 0
 func _ready() -> void:
 	_rng.randomize()
 	_setup_ui()
+	_capture_palette()
 
 	if player.has_method("set_wall"):
 		player.call("set_wall", wall)
@@ -107,13 +111,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not key_event.pressed or key_event.echo:
 			return
 
-		var choice_index = _choice_from_key(key_event.keycode)
-		if choice_index >= 0:
-			if _state == STATE_CONTRACT_SELECT:
-				_pick_contract(choice_index)
-			elif _state == STATE_UPGRADE_SELECT:
-				_pick_upgrade(choice_index)
-			return
+		if _state == STATE_IN_CONTRACT:
+			var color_index = _color_index_from_key(key_event.keycode)
+			if color_index >= 0:
+				_set_selected_color(color_index)
+				return
+		else:
+			var choice_index = _choice_from_key(key_event.keycode)
+			if choice_index >= 0:
+				if _state == STATE_CONTRACT_SELECT:
+					_pick_contract(choice_index)
+				elif _state == STATE_UPGRADE_SELECT:
+					_pick_upgrade(choice_index)
+				return
 
 		if _state == STATE_RUN_OVER and (
 			key_event.keycode == KEY_R
@@ -121,6 +131,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			or key_event.keycode == KEY_SPACE
 		):
 			_start_new_run()
+
+	if event is InputEventMouseButton:
+		var mouse_event = event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed and _state == STATE_IN_CONTRACT:
+			_pick_color_by_mouse(mouse_event.position)
 
 
 func _draw() -> void:
@@ -138,30 +153,31 @@ func _draw() -> void:
 
 
 func _setup_ui() -> void:
-	title_label.text = "Contratos"
+	title_label.text = "Painel"
 	help_label.layout_mode = 0
 	help_label.offset_left = 20.0
-	help_label.offset_top = 204.0
+	help_label.offset_top = 664.0
 	help_label.offset_right = 180.0
-	help_label.offset_bottom = 228.0
+	help_label.offset_bottom = 698.0
+	help_label.add_theme_font_size_override("font_size", 12)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "WASD mover  |  1-2-3 escolhas  |  R reinicia"
+	help_label.text = "WASD mover | 1-4 cor | Clique na paleta"
 
-	money_value = _ensure_stat_label("MoneyValue", 20.0, 420.0, 180.0, 446.0, 18)
-	day_value = _ensure_stat_label("DayValue", 20.0, 462.0, 180.0, 488.0, 18)
-	streak_value = _ensure_stat_label("StreakValue", 20.0, 504.0, 180.0, 530.0, 18)
-	paint_value = _ensure_stat_label("PaintValue", 20.0, 546.0, 180.0, 572.0, 18)
-	risk_value = _ensure_stat_label("RiskValue", 20.0, 588.0, 180.0, 614.0, 16)
-	event_value = _ensure_stat_label("EventValue", 20.0, 630.0, 180.0, 656.0, 16)
+	money_value = _ensure_stat_label("MoneyValue", 20.0, 414.0, 180.0, 438.0, 17)
+	day_value = _ensure_stat_label("DayValue", 20.0, 452.0, 180.0, 476.0, 17)
+	streak_value = _ensure_stat_label("StreakValue", 20.0, 490.0, 180.0, 514.0, 17)
+	paint_value = _ensure_stat_label("PaintValue", 20.0, 528.0, 180.0, 552.0, 17)
+	risk_value = _ensure_stat_label("RiskValue", 20.0, 566.0, 180.0, 590.0, 15)
+	event_value = _ensure_stat_label("EventValue", 20.0, 604.0, 180.0, 628.0, 15)
 
-	_ensure_stat_label("MoneyTitle", 20.0, 400.0, 180.0, 422.0, 13).text = "Creditos"
-	_ensure_stat_label("DayTitle", 20.0, 442.0, 180.0, 464.0, 13).text = "Dia da run"
-	_ensure_stat_label("StreakTitle", 20.0, 484.0, 180.0, 506.0, 13).text = "Streak"
-	_ensure_stat_label("PaintTitle", 20.0, 526.0, 180.0, 548.0, 13).text = "Tanque"
-	_ensure_stat_label("RiskTitle", 20.0, 568.0, 180.0, 590.0, 13).text = "Risco"
-	_ensure_stat_label("EventTitle", 20.0, 610.0, 180.0, 632.0, 13).text = "Evento"
+	_ensure_stat_label("MoneyTitle", 20.0, 394.0, 180.0, 414.0, 12).text = "Creditos"
+	_ensure_stat_label("DayTitle", 20.0, 432.0, 180.0, 452.0, 12).text = "Dia da run"
+	_ensure_stat_label("StreakTitle", 20.0, 470.0, 180.0, 490.0, 12).text = "Streak"
+	_ensure_stat_label("PaintTitle", 20.0, 508.0, 180.0, 528.0, 12).text = "Tanque"
+	_ensure_stat_label("RiskTitle", 20.0, 546.0, 180.0, 566.0, 12).text = "Risco"
+	_ensure_stat_label("EventTitle", 20.0, 584.0, 180.0, 604.0, 12).text = "Evento"
 
-	choice_panel = _ensure_panel("ChoicePanel", 250.0, 90.0, 1070.0, 620.0)
+	choice_panel = _ensure_panel("ChoicePanel", 300.0, 90.0, 1220.0, 620.0)
 	choice_panel.self_modulate = Color(0.95, 0.96, 0.98, 0.95)
 	choice_title = _ensure_panel_label(choice_panel, "ChoiceTitle", 24.0, 20.0, 796.0, 56.0, 28)
 	choice_body = _ensure_panel_label(choice_panel, "ChoiceBody", 24.0, 76.0, 796.0, 460.0, 19)
@@ -238,6 +254,59 @@ func _choice_from_key(keycode: int) -> int:
 	if keycode == KEY_3 or keycode == KEY_KP_3:
 		return 2
 	return -1
+
+
+func _color_index_from_key(keycode: int) -> int:
+	if keycode == KEY_1 or keycode == KEY_KP_1:
+		return 0
+	if keycode == KEY_2 or keycode == KEY_KP_2:
+		return 1
+	if keycode == KEY_3 or keycode == KEY_KP_3:
+		return 2
+	if keycode == KEY_4 or keycode == KEY_KP_4:
+		return 3
+	return -1
+
+
+func _capture_palette() -> void:
+	_palette = [
+		swatch_blue.color,
+		swatch_orange.color,
+		swatch_green.color,
+		swatch_purple.color,
+	]
+	_set_selected_color(0)
+
+
+func _pick_color_by_mouse(global_pos: Vector2) -> void:
+	var swatches = [swatch_blue, swatch_orange, swatch_green, swatch_purple]
+	for i in range(swatches.size()):
+		if swatches[i].get_global_rect().has_point(global_pos):
+			_set_selected_color(i)
+			return
+
+
+func _set_selected_color(index: int) -> void:
+	if _palette.is_empty():
+		return
+	_selected_color_index = clampi(index, 0, _palette.size() - 1)
+	var selected_color = _palette[_selected_color_index]
+
+	if wall.has_method("set_paint_color"):
+		wall.call("set_paint_color", selected_color)
+	if player.has_method("set_paint_color"):
+		player.call("set_paint_color", selected_color)
+
+	_refresh_palette_visuals()
+
+
+func _refresh_palette_visuals() -> void:
+	var swatches = [swatch_blue, swatch_orange, swatch_green, swatch_purple]
+	for i in range(swatches.size()):
+		if i == _selected_color_index:
+			swatches[i].self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+		else:
+			swatches[i].self_modulate = Color(0.76, 0.76, 0.76, 0.95)
 
 
 func _start_new_run() -> void:
@@ -341,10 +410,19 @@ func _start_contract() -> void:
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
 
-	_apply_palette(_selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0)))
+	var contract_color: Color = _selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0))
+	_apply_palette(contract_color)
+	_palette = [
+		swatch_blue.color,
+		swatch_orange.color,
+		swatch_green.color,
+		swatch_purple.color,
+	]
+	_set_selected_color(0)
+
 	choice_panel.visible = false
 	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
-	center_message.text = "Pinte sem parar e sobreviva ao clima."
+	center_message.text = "Pinte sem parar (1-4 troca cor) e sobreviva ao clima."
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -366,7 +444,7 @@ func _process_contract(delta: float) -> void:
 	var total_cells = maxi(1, int(wall.call("get_total_cells")))
 	var fracture_ratio = float(bad_cells) / float(total_cells)
 
-	if coverage <= fail_threshold or fracture_ratio >= 0.72:
+	if coverage <= fail_threshold or fracture_ratio >= 0.90:
 		_fail_run("O muro cedeu sob a chuva acida.", coverage, lowest)
 		return
 
@@ -383,7 +461,7 @@ func _process_contract(delta: float) -> void:
 func _update_drops(delta: float) -> void:
 	var wall_rect: Rect2 = wall.call("get_wall_rect_global")
 	var duration = maxf(1.0, float(_selected_contract.get("duration", 60.0)))
-	var pressure = 1.0 + (_elapsed / duration) * 0.42 + float(maxi(0, _run_day - 1)) * 0.05
+	var pressure = 1.0 + (_elapsed / duration) * 0.25 + float(maxi(0, _run_day - 1)) * 0.03
 	var event_spawn_mult = _event_value("spawn_mult", 1.0)
 	var event_speed_mult = _event_value("speed_mult", 1.0)
 	var event_radius_mult = _event_value("radius_mult", 1.0)
@@ -392,7 +470,7 @@ func _update_drops(delta: float) -> void:
 	var drop_interval_mult = float(_run_modifiers.get("drop_interval_mult", 1.0))
 
 	var base_interval = float(_selected_contract.get("drop_interval", 0.52))
-	var spawn_interval = maxf(0.07, (base_interval * drop_interval_mult) / (pressure * event_spawn_mult))
+	var spawn_interval = maxf(0.16, (base_interval * drop_interval_mult) / (pressure * event_spawn_mult))
 
 	_drop_timer -= delta
 	while _drop_timer <= 0.0:
@@ -400,7 +478,7 @@ func _update_drops(delta: float) -> void:
 		_drop_timer += spawn_interval
 
 	var melt_resist = clampf(float(_run_modifiers.get("melt_resist", 0.0)), 0.0, 0.82)
-	var damage_scale = maxf(0.05, event_damage_mult * (1.0 - melt_resist))
+	var damage_scale = maxf(0.05, event_damage_mult * (1.0 - melt_resist) * 0.32)
 
 	for i in range(_drops.size() - 1, -1, -1):
 		var drop: Dictionary = _drops[i]
@@ -687,14 +765,14 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 	var day_scale = 1.0 + float(maxi(0, _run_day - 1)) * 0.08
 	var duration = _rng.randf_range(float(template.get("duration_min", 45.0)), float(template.get("duration_max", 80.0)))
 	var target = clampf(
-		_rng.randf_range(float(template.get("target_min", 0.62)), float(template.get("target_max", 0.82))) + (float(_run_day - 1) * 0.006),
-		0.5,
-		0.92
+		_rng.randf_range(float(template.get("target_min", 0.62)), float(template.get("target_max", 0.82))) + (float(_run_day - 1) * 0.0035),
+		0.52,
+		0.86
 	)
 	var fail_threshold = clampf(
-		_rng.randf_range(float(template.get("fail_min", 0.18)), float(template.get("fail_max", 0.27))) + (float(_run_day - 1) * 0.0025),
-		0.1,
-		0.5
+		_rng.randf_range(float(template.get("fail_min", 0.18)), float(template.get("fail_max", 0.27))) + (float(_run_day - 1) * 0.0012),
+		0.08,
+		0.42
 	)
 	var payout = int(round(_rng.randf_range(float(template.get("payout_min", 80.0)), float(template.get("payout_max", 160.0))) * day_scale))
 	var drop_interval = maxf(
@@ -768,9 +846,9 @@ func _update_sidebar_meta() -> void:
 
 func _apply_palette(base_color: Color) -> void:
 	swatch_blue.color = base_color
-	swatch_orange.color = base_color.lightened(0.24)
-	swatch_green.color = base_color.darkened(0.16)
-	swatch_purple.color = base_color.darkened(0.32)
+	swatch_orange.color = Color(0.94, 0.57, 0.25, 1.0)
+	swatch_green.color = Color(0.24, 0.74, 0.50, 1.0)
+	swatch_purple.color = Color(0.67, 0.45, 0.88, 1.0)
 
 
 func _base_modifiers() -> Dictionary:
@@ -804,18 +882,18 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"description": "Fachada pequena, chuva leve e pouco tempo de caos.",
 			"duration_min": 46.0,
 			"duration_max": 62.0,
-			"target_min": 0.64,
-			"target_max": 0.74,
-			"fail_min": 0.17,
-			"fail_max": 0.24,
+			"target_min": 0.58,
+			"target_max": 0.70,
+			"fail_min": 0.13,
+			"fail_max": 0.20,
 			"payout_min": 95.0,
 			"payout_max": 150.0,
-			"drop_interval_min": 0.46,
-			"drop_interval_max": 0.72,
-			"drop_speed_min": 130.0,
-			"drop_speed_max": 200.0,
-			"drop_power_min": 0.65,
-			"drop_power_max": 1.05,
+			"drop_interval_min": 0.62,
+			"drop_interval_max": 0.92,
+			"drop_speed_min": 120.0,
+			"drop_speed_max": 180.0,
+			"drop_power_min": 0.45,
+			"drop_power_max": 0.85,
 			"drop_radius_min": 5.0,
 			"drop_radius_max": 8.0,
 			"event_min": 0.24,
@@ -832,18 +910,18 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"description": "Goteira constante e publico apressado cobrando acabamento.",
 			"duration_min": 54.0,
 			"duration_max": 76.0,
-			"target_min": 0.67,
-			"target_max": 0.79,
-			"fail_min": 0.18,
-			"fail_max": 0.27,
+			"target_min": 0.60,
+			"target_max": 0.74,
+			"fail_min": 0.14,
+			"fail_max": 0.22,
 			"payout_min": 130.0,
 			"payout_max": 210.0,
-			"drop_interval_min": 0.38,
-			"drop_interval_max": 0.58,
-			"drop_speed_min": 160.0,
-			"drop_speed_max": 245.0,
-			"drop_power_min": 0.86,
-			"drop_power_max": 1.32,
+			"drop_interval_min": 0.54,
+			"drop_interval_max": 0.82,
+			"drop_speed_min": 140.0,
+			"drop_speed_max": 210.0,
+			"drop_power_min": 0.60,
+			"drop_power_max": 1.00,
 			"drop_radius_min": 6.0,
 			"drop_radius_max": 9.5,
 			"event_min": 0.34,
@@ -860,18 +938,18 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"description": "Ar pesado, respingos acidos e meta artistica alta.",
 			"duration_min": 58.0,
 			"duration_max": 84.0,
-			"target_min": 0.70,
-			"target_max": 0.84,
-			"fail_min": 0.20,
-			"fail_max": 0.30,
+			"target_min": 0.64,
+			"target_max": 0.78,
+			"fail_min": 0.15,
+			"fail_max": 0.24,
 			"payout_min": 175.0,
 			"payout_max": 280.0,
-			"drop_interval_min": 0.32,
-			"drop_interval_max": 0.50,
-			"drop_speed_min": 190.0,
-			"drop_speed_max": 280.0,
-			"drop_power_min": 1.00,
-			"drop_power_max": 1.55,
+			"drop_interval_min": 0.47,
+			"drop_interval_max": 0.72,
+			"drop_speed_min": 160.0,
+			"drop_speed_max": 235.0,
+			"drop_power_min": 0.74,
+			"drop_power_max": 1.12,
 			"drop_radius_min": 6.5,
 			"drop_radius_max": 10.2,
 			"event_min": 0.42,
@@ -888,18 +966,18 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"description": "Vento lateral forte e derretimento agressivo.",
 			"duration_min": 62.0,
 			"duration_max": 90.0,
-			"target_min": 0.72,
-			"target_max": 0.86,
-			"fail_min": 0.21,
-			"fail_max": 0.31,
+			"target_min": 0.67,
+			"target_max": 0.80,
+			"fail_min": 0.16,
+			"fail_max": 0.25,
 			"payout_min": 230.0,
 			"payout_max": 340.0,
-			"drop_interval_min": 0.27,
-			"drop_interval_max": 0.44,
-			"drop_speed_min": 220.0,
-			"drop_speed_max": 320.0,
-			"drop_power_min": 1.10,
-			"drop_power_max": 1.72,
+			"drop_interval_min": 0.42,
+			"drop_interval_max": 0.66,
+			"drop_speed_min": 180.0,
+			"drop_speed_max": 260.0,
+			"drop_power_min": 0.85,
+			"drop_power_max": 1.25,
 			"drop_radius_min": 7.0,
 			"drop_radius_max": 11.5,
 			"event_min": 0.50,
@@ -916,18 +994,18 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"description": "Contrato lendario: clima extremo e zero tolerancia.",
 			"duration_min": 66.0,
 			"duration_max": 96.0,
-			"target_min": 0.75,
-			"target_max": 0.88,
-			"fail_min": 0.22,
-			"fail_max": 0.33,
+			"target_min": 0.70,
+			"target_max": 0.83,
+			"fail_min": 0.17,
+			"fail_max": 0.27,
 			"payout_min": 300.0,
 			"payout_max": 460.0,
-			"drop_interval_min": 0.23,
-			"drop_interval_max": 0.36,
-			"drop_speed_min": 240.0,
-			"drop_speed_max": 360.0,
-			"drop_power_min": 1.25,
-			"drop_power_max": 1.95,
+			"drop_interval_min": 0.37,
+			"drop_interval_max": 0.58,
+			"drop_speed_min": 200.0,
+			"drop_speed_max": 290.0,
+			"drop_power_min": 0.95,
+			"drop_power_max": 1.42,
 			"drop_radius_min": 7.5,
 			"drop_radius_max": 12.0,
 			"event_min": 0.58,
@@ -1018,25 +1096,25 @@ func _build_event_catalog() -> Array[Dictionary]:
 			"description": "A chuva ficou corrosiva e mais agressiva.",
 			"duration_min": 7.0,
 			"duration_max": 12.0,
-			"spawn_mult": 1.35,
-			"speed_mult": 1.18,
-			"damage_mult": 1.42,
-			"radius_mult": 1.08,
+			"spawn_mult": 1.12,
+			"speed_mult": 1.08,
+			"damage_mult": 1.16,
+			"radius_mult": 1.04,
 			"wind": 0.0,
-			"player_speed_mult": 0.95,
-			"player_paint_mult": 0.88,
-			"player_drain_mult": 1.20,
+			"player_speed_mult": 0.98,
+			"player_paint_mult": 0.96,
+			"player_drain_mult": 1.08,
 		},
 		{
 			"name": "Rajada Lateral",
 			"description": "Vento empurra as gotas para os cantos do muro.",
 			"duration_min": 6.0,
 			"duration_max": 10.0,
-			"spawn_mult": 1.08,
-			"speed_mult": 1.06,
-			"damage_mult": 1.04,
+			"spawn_mult": 1.04,
+			"speed_mult": 1.03,
+			"damage_mult": 1.0,
 			"radius_mult": 1.0,
-			"wind": 120.0,
+			"wind": 90.0,
 			"player_speed_mult": 1.0,
 			"player_paint_mult": 1.0,
 			"player_drain_mult": 1.05,
@@ -1048,12 +1126,12 @@ func _build_event_catalog() -> Array[Dictionary]:
 			"duration_max": 13.0,
 			"spawn_mult": 0.92,
 			"speed_mult": 1.0,
-			"damage_mult": 1.15,
+			"damage_mult": 1.05,
 			"radius_mult": 1.0,
 			"wind": 0.0,
-			"player_speed_mult": 0.96,
-			"player_paint_mult": 0.74,
-			"player_drain_mult": 1.34,
+			"player_speed_mult": 0.98,
+			"player_paint_mult": 0.88,
+			"player_drain_mult": 1.15,
 		},
 		{
 			"name": "Frente Fria",

@@ -1,12 +1,12 @@
 extends CharacterBody2D
 
 @export var base_speed: float = 290.0
-@export var move_bounds: Rect2 = Rect2(190.0, 430.0, 900.0, 220.0)
-@export var base_paint_radius: float = 56.0
-@export var base_paint_strength_per_second: float = 2.5
-@export var base_paint_capacity: float = 100.0
-@export var base_paint_regen_per_second: float = 13.0
-@export var base_paint_drain_per_second: float = 23.0
+@export var move_bounds: Rect2 = Rect2(250.0, 430.0, 840.0, 220.0)
+@export var base_paint_radius: float = 66.0
+@export var base_paint_strength_per_second: float = 4.0
+@export var base_paint_capacity: float = 220.0
+@export var base_paint_regen_per_second: float = 30.0
+@export var base_paint_drain_per_second: float = 7.0
 
 @onready var roller: Node2D = $Roller
 @onready var foam: Polygon2D = $Roller/Foam
@@ -25,6 +25,7 @@ var _paint_capacity: float = base_paint_capacity
 var _paint_regen: float = base_paint_regen_per_second
 var _paint_drain: float = base_paint_drain_per_second
 var _paint_amount: float = base_paint_capacity
+var _active_paint_color: Color = Color(0.35, 0.66, 0.95, 1.0)
 
 
 func _ready() -> void:
@@ -53,6 +54,12 @@ func apply_run_modifiers(modifiers: Dictionary) -> void:
 
 func refill_paint() -> void:
 	_paint_amount = _paint_capacity
+
+
+func set_paint_color(color: Color) -> void:
+	_active_paint_color = color
+	if _paint_amount > 5.0:
+		foam.modulate = color
 
 
 func set_external_modifiers(speed_multiplier: float, paint_multiplier: float, drain_multiplier: float) -> void:
@@ -121,4 +128,4 @@ func _physics_process(delta: float) -> void:
 		_paint_amount = minf(_paint_capacity, _paint_amount + (_paint_regen * delta))
 
 	_is_painting = did_paint
-	foam.modulate = Color(0.35, 0.66, 0.95, 1.0) if _paint_amount > 5.0 else Color(0.4, 0.4, 0.4, 1.0)
+	foam.modulate = _active_paint_color if _paint_amount > 5.0 else Color(0.45, 0.45, 0.45, 1.0)
