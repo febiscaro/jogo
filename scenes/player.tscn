@@ -6,14 +6,27 @@
 radius = 18.0
 
 [node name="Player" type="CharacterBody2D"]
+move_bounds = Rect2(190, 430, 900, 220)
 script = ExtResource("1_3v80g")
 
-[node name="Visual" type="Polygon2D" parent="."]
-color = Color(0.0980392, 0.682353, 0.556863, 1)
-polygon = PackedVector2Array(0, -20, 16, 12, 0, 20, -16, 12)
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.92, 0.43, 0.24, 1)
+polygon = PackedVector2Array(0, -24, 16, 10, 0, 22, -16, 10)
+
+[node name="Head" type="Polygon2D" parent="."]
+position = Vector2(0, -30)
+color = Color(0.96, 0.82, 0.64, 1)
+polygon = PackedVector2Array(0, -8, 8, 0, 0, 8, -8, 0)
+
+[node name="Roller" type="Polygon2D" parent="."]
+position = Vector2(0, -56)
+color = Color(0.19, 0.26, 0.32, 1)
+polygon = PackedVector2Array(-12, 12, -2, -10, 10, -10, 20, 12)
+
+[node name="Foam" type="Polygon2D" parent="Roller"]
+position = Vector2(0, -10)
+color = Color(0.35, 0.66, 0.95, 1)
+polygon = PackedVector2Array(-16, 0, 16, 0, 16, -12, -16, -12)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_a7yob")
-
-[node name="Camera2D" type="Camera2D" parent="."]
-enabled = true

@@ -1,19 +1,24 @@
-# Jogo 2D Base (Godot 4)
+# Pintor do Muro (Godot 4)
 
-Projeto base para começar um jogo 2D na Godot 4.
+Protótipo 2D inspirado na sua ideia:
 
-## O que vem pronto
+- Você controla um pintor com `WASD`.
+- O muro precisa ficar pintado da cor-alvo.
+- Gotas caem e derretem a tinta.
+- O pintor precisa ir até o muro para retocar.
 
-- Cena principal (`scenes/main.tscn`)
-- Player com movimento 8 direcoes (`scenes/player.tscn`)
-- Script de controle (`scripts/player.gd`)
-
-## Como abrir
+## Como jogar
 
 1. Abra a Godot 4.
-2. Clique em **Import** e selecione a pasta deste repositorio.
+2. Clique em **Import** e selecione a pasta deste repositório.
 3. Execute com `F5`.
 
 ## Controles
 
-- Setas ou `WASD` (mapeados nos `ui_*` padroes da Godot)
+- `W`, `A`, `S`, `D`: movimentar o pintor.
+- `R`: reiniciar após vitória/derrota.
+
+## Regras
+
+- Sobreviva até o tempo acabar mantendo o muro acima da cobertura mínima.
+- Se a cobertura cair demais antes disso, é derrota.
