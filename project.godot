@@ -1,5 +1,5 @@
 ; Engine configuration file.
-; It's best edited using the editor and not directly,
+; It's best edited using the editor UI and not directly,
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
@@ -8,11 +8,15 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="Pintor do Muro"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.2")
+config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
 
 [display]

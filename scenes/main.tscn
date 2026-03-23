@@ -1,81 +1,86 @@
-[gd_scene load_steps=4 format=3 uid="uid://cc0wq4lni0vgd"]
+[gd_scene format=3 uid="uid://cc0wq4lni0vgd"]
 
-[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_vah6k"]
-[ext_resource type="Script" path="res://scripts/game.gd" id="2_mitcd"]
-[ext_resource type="Script" path="res://scripts/wall.gd" id="3_l2wns"]
+[ext_resource type="PackedScene" uid="uid://b6fpk2p8k8n17" path="res://scenes/player.tscn" id="1_vah6k"]
+[ext_resource type="Script" uid="uid://bxpbvcbiu4t8k" path="res://scripts/game.gd" id="2_mitcd"]
+[ext_resource type="Script" uid="uid://mudelwur7kc1" path="res://scripts/wall.gd" id="3_l2wns"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1595961631]
 script = ExtResource("2_mitcd")
 
-[node name="Background" type="Polygon2D" parent="."]
-color = Color(0.84, 0.86, 0.90, 1)
+[node name="Background" type="Polygon2D" parent="." unique_id=712333400]
+color = Color(0.84, 0.86, 0.9, 1)
 polygon = PackedVector2Array(0, 0, 1280, 0, 1280, 720, 0, 720)
 
-[node name="Ground" type="Polygon2D" parent="."]
-color = Color(0.70, 0.76, 0.66, 1)
+[node name="Ground" type="Polygon2D" parent="." unique_id=1705559865]
+color = Color(0.7, 0.76, 0.66, 1)
 polygon = PackedVector2Array(0, 430, 1280, 430, 1280, 720, 0, 720)
 
-[node name="Wall" type="Node2D" parent="."]
+[node name="Wall" type="Node2D" parent="." unique_id=1062166686]
 position = Vector2(250, 95)
 script = ExtResource("3_l2wns")
-wall_size = Vector2(820, 320)
-paint_color = Color(0.31, 0.62, 0.90, 1)
 
-[node name="Player" parent="." instance=ExtResource("1_vah6k")]
+[node name="Player" parent="." unique_id=836326921 instance=ExtResource("1_vah6k")]
 position = Vector2(640, 595)
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=1295843090]
 
-[node name="Sidebar" type="Panel" parent="UI"]
+[node name="Sidebar" type="Panel" parent="UI" unique_id=1580902092]
+self_modulate = Color(0.94, 0.95, 0.96, 0.88)
 offset_left = 18.0
 offset_top = 18.0
 offset_right = 220.0
 offset_bottom = 702.0
-self_modulate = Color(0.94, 0.95, 0.96, 0.88)
 
-[node name="Title" type="Label" parent="UI/Sidebar"]
+[node name="Title" type="Label" parent="UI/Sidebar" unique_id=1538614396]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 18.0
 offset_right = 180.0
 offset_bottom = 48.0
 text = "Tintas"
 
-[node name="SwatchBlue" type="ColorRect" parent="UI/Sidebar"]
+[node name="SwatchBlue" type="ColorRect" parent="UI/Sidebar" unique_id=1436930460]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 56.0
 offset_right = 84.0
 offset_bottom = 120.0
-color = Color(0.31, 0.62, 0.90, 1)
+color = Color(0.31, 0.62, 0.9, 1)
 
-[node name="SwatchOrange" type="ColorRect" parent="UI/Sidebar"]
+[node name="SwatchOrange" type="ColorRect" parent="UI/Sidebar" unique_id=96813496]
+layout_mode = 0
 offset_left = 96.0
 offset_top = 56.0
 offset_right = 160.0
 offset_bottom = 120.0
 color = Color(0.95, 0.58, 0.27, 1)
 
-[node name="SwatchGreen" type="ColorRect" parent="UI/Sidebar"]
+[node name="SwatchGreen" type="ColorRect" parent="UI/Sidebar" unique_id=1124044727]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 132.0
 offset_right = 84.0
 offset_bottom = 196.0
 color = Color(0.25, 0.73, 0.53, 1)
 
-[node name="SwatchPurple" type="ColorRect" parent="UI/Sidebar"]
+[node name="SwatchPurple" type="ColorRect" parent="UI/Sidebar" unique_id=1856662933]
+layout_mode = 0
 offset_left = 96.0
 offset_top = 132.0
 offset_right = 160.0
 offset_bottom = 196.0
 color = Color(0.66, 0.44, 0.88, 1)
 
-[node name="CoverageTitle" type="Label" parent="UI/Sidebar"]
+[node name="CoverageTitle" type="Label" parent="UI/Sidebar" unique_id=1875066216]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 232.0
 offset_right = 176.0
 offset_bottom = 262.0
 text = "Muro Pintado"
 
-[node name="CoverageValue" type="Label" parent="UI/Sidebar"]
+[node name="CoverageValue" type="Label" parent="UI/Sidebar" unique_id=897343400]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 264.0
 offset_right = 176.0
@@ -83,14 +88,16 @@ offset_bottom = 308.0
 theme_override_font_sizes/font_size = 32
 text = "0%"
 
-[node name="TimeTitle" type="Label" parent="UI/Sidebar"]
+[node name="TimeTitle" type="Label" parent="UI/Sidebar" unique_id=1528562758]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 336.0
 offset_right = 176.0
 offset_bottom = 366.0
 text = "Tempo"
 
-[node name="TimeValue" type="Label" parent="UI/Sidebar"]
+[node name="TimeValue" type="Label" parent="UI/Sidebar" unique_id=1562988237]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 368.0
 offset_right = 176.0
@@ -98,26 +105,31 @@ offset_bottom = 412.0
 theme_override_font_sizes/font_size = 32
 text = "0.0s"
 
-[node name="Help" type="Label" parent="UI/Sidebar"]
+[node name="Help" type="Label" parent="UI/Sidebar" unique_id=905287852]
+layout_mode = 0
 offset_left = 20.0
 offset_top = 460.0
 offset_right = 180.0
 offset_bottom = 620.0
-autowrap_mode = 3
-text = "WASD para mover o pintor.\n\nAs gotas derretem a tinta.\nFique no muro para retocar.\n\nNo fim do tempo, mantenha o muro bonito."
+text = "WASD para mover o pintor.
 
-[node name="TopStatus" type="Label" parent="UI"]
+As gotas derretem a tinta.
+Fique no muro para retocar.
+
+No fim do tempo, mantenha o muro bonito."
+autowrap_mode = 3
+
+[node name="TopStatus" type="Label" parent="UI" unique_id=1070277644]
 offset_left = 250.0
 offset_top = 20.0
 offset_right = 1070.0
 offset_bottom = 52.0
-horizontal_alignment = 1
 text = "Mantenha o muro acima de 70%"
+horizontal_alignment = 1
 
-[node name="CenterMessage" type="Label" parent="UI"]
+[node name="CenterMessage" type="Label" parent="UI" unique_id=185559425]
 offset_left = 250.0
 offset_top = 665.0
 offset_right = 1070.0
 offset_bottom = 705.0
 horizontal_alignment = 1
-text = ""

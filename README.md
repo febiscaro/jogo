@@ -1,24 +1,37 @@
-# Pintor do Muro (Godot 4)
+# Pintor do Muro - Roguelike de Contratos (Godot 4)
 
-Protótipo 2D inspirado na sua ideia:
+Projeto 2D em Godot 4 com loop roguelike:
 
-- Você controla um pintor com `WASD`.
-- O muro precisa ficar pintado da cor-alvo.
-- Gotas caem e derretem a tinta.
-- O pintor precisa ir até o muro para retocar.
+- escolha 1 entre 3 contratos,
+- cumpra meta de cobertura do muro enquanto gotas destroem a tinta,
+- receba pagamento,
+- escolha upgrade,
+- avance para contratos mais perigosos ate quebrar a run.
 
-## Como jogar
+## Como abrir
 
-1. Abra a Godot 4.
-2. Clique em **Import** e selecione a pasta deste repositório.
-3. Execute com `F5`.
+1. Abra a Godot 4.x.
+2. Clique em **Import**.
+3. Selecione `project.godot` desta pasta.
+4. Abra e rode com `F5`.
 
 ## Controles
 
-- `W`, `A`, `S`, `D`: movimentar o pintor.
-- `R`: reiniciar após vitória/derrota.
+- `W`, `A`, `S`, `D`: mover pintor
+- `1`, `2`, `3`: escolher contrato/upgrade
+- `R` (ou `Enter`/`Espaco` no fim): iniciar nova run
 
-## Regras
+## Sistemas principais
 
-- Sobreviva até o tempo acabar mantendo o muro acima da cobertura mínima.
-- Se a cobertura cair demais antes disso, é derrota.
+- Contratos com risco procedural (tempo, meta, chuva, pagamento)
+- Eventos dinamicos durante o contrato (temporal, rajada, seca, frente fria)
+- Economia da run (creditos por contrato)
+- Upgrades de run (movimento, tinta, resistencia, payout, etc.)
+- Meta progresso salvo em `user://meta_progress.json` (melhor streak e totais)
+
+## Estrutura
+
+- `scenes/main.tscn`: cena principal
+- `scripts/game.gd`: loop roguelike de contratos
+- `scripts/player.gd`: movimento, tanque e retoque
+- `scripts/wall.gd`: grade de cobertura, pintura e derretimento
