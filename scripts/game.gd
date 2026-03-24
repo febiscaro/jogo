@@ -340,7 +340,8 @@ func _draw_postfx_grain(viewport_size: Vector2, intensity: float) -> void:
 
 
 func _hash_noise(seed: float) -> float:
-	return fract(sin(seed * 12.9898 + 78.233) * 43758.5453)
+	var value = sin(seed * 12.9898 + 78.233) * 43758.5453
+	return value - floor(value)
 
 
 func _setup_ui() -> void:
@@ -2234,5 +2235,3 @@ func _load_meta_progress() -> void:
 	_meta_best_streak = int(data.get("best_streak", 0))
 	_meta_total_runs = int(data.get("total_runs", 0))
 	_meta_total_credits = int(data.get("total_credits", 0))
-
-
