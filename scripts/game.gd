@@ -115,13 +115,28 @@ var _focus_zone_timer: float = 0.0
 var _focus_zone_duration: float = 0.0
 var _focus_zone_progress: float = 0.0
 var _focus_zone_cooldown: float = 0.0
+var _postfx_strength: float = 1.0
+var _app_state: Node = null
+var _launch_mode: String = "run"
+var _special_contracts_unlocked: bool = false
+var _pending_unlock_message: String = ""
+var _tutorial_mode: bool = false
+var _tutorial_step: int = 0
+var _tutorial_move_accum: float = 0.0
+var _tutorial_paint_time: float = 0.0
+var _tutorial_refill_time: float = 0.0
+var _tutorial_last_player_x: float = 0.0
+var _tutorial_start_color_index: int = 0
 
 
 func _ready() -> void:
 	_rng.randomize()
 	_base_scene_position = position
+	_app_state = get_node_or_null("/root/AppState")
+	_launch_mode = _consume_launch_mode()
 	_setup_ui()
 	_capture_palette()
+	_apply_profile_settings()
 
 	if player.has_method("set_wall"):
 		player.call("set_wall", wall)
@@ -131,7 +146,38 @@ func _ready() -> void:
 	_event_catalog = _build_event_catalog()
 
 	_load_meta_progress()
-	_start_new_run()
+	if _launch_mode == "tutorial":
+		_start_tutorial_run()
+	else:
+		_start_new_run()
+
+
+func _consume_launch_mode() -> String:
+	if _app_state != null and _app_state.has_method("consume_launch_mode"):
+		return String(_app_state.call("consume_launch_mode"))
+	return "run"
+
+
+func _apply_profile_settings() -> void:
+	_postfx_strength = 1.0
+	_special_contracts_unlocked = false
+	var cursor_sensitivity = 1.0
+	var selected_cosmetic = "classic"
+
+	if _app_state != null:
+		if _app_state.has_method("get_postfx_strength"):
+			_postfx_strength = clampf(float(_app_state.call("get_postfx_strength")), 0.45, 1.70)
+		if _app_state.has_method("is_special_contracts_unlocked"):
+			_special_contracts_unlocked = bool(_app_state.call("is_special_contracts_unlocked"))
+		if _app_state.has_method("get_cursor_sensitivity"):
+			cursor_sensitivity = float(_app_state.call("get_cursor_sensitivity"))
+		if _app_state.has_method("get_selected_cosmetic"):
+			selected_cosmetic = String(_app_state.call("get_selected_cosmetic"))
+
+	if player.has_method("set_cursor_sensitivity"):
+		player.call("set_cursor_sensitivity", cursor_sensitivity)
+	if player.has_method("set_cosmetic_profile"):
+		player.call("set_cosmetic_profile", selected_cosmetic)
 
 
 func _process(delta: float) -> void:
@@ -182,7 +228,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _is_paused:
 			if key_event.keycode == KEY_R:
 				_is_paused = false
-				_start_new_run()
+				if _tutorial_mode:
+					_start_tutorial_run()
+				else:
+					_start_new_run()
 			return
 
 		if _state == STATE_IN_CONTRACT:
@@ -204,7 +253,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			or key_event.keycode == KEY_ENTER
 			or key_event.keycode == KEY_SPACE
 		):
-			_start_new_run()
+			if _tutorial_mode and key_event.keycode == KEY_R:
+				_start_tutorial_run()
+			else:
+				_start_new_run()
 
 
 func _draw() -> void:
@@ -295,7 +347,7 @@ func _draw_post_fx() -> void:
 
 	var stress = clampf(_camera_shake_strength * 0.6 + float(_drops.size()) / 220.0, 0.0, 1.0)
 	var storm = clampf(_event_value("damage_mult", 1.0) - 1.0, 0.0, 1.4) if _state == STATE_IN_CONTRACT else 0.0
-	var intensity = clampf(0.18 + stress * 0.5 + storm * 0.35, 0.12, 1.0)
+	var intensity = clampf((0.18 + stress * 0.5 + storm * 0.35) * _postfx_strength, 0.08, 1.0)
 
 	_draw_postfx_bloom(viewport_size, intensity)
 	_draw_postfx_chromatic_edges(viewport_size, intensity)
@@ -865,7 +917,16 @@ func _update_environment_weather() -> void:
 
 
 func _start_new_run() -> void:
+	_apply_profile_settings()
 	_is_paused = false
+	_tutorial_mode = false
+	_tutorial_step = 0
+	_tutorial_move_accum = 0.0
+	_tutorial_paint_time = 0.0
+	_tutorial_refill_time = 0.0
+	_tutorial_last_player_x = 0.0
+	_tutorial_start_color_index = 0
+	_pending_unlock_message = ""
 	_camera_shake_strength = 0.0
 	_camera_shake_phase = 0.0
 	position = _base_scene_position
@@ -905,6 +966,192 @@ func _start_new_run() -> void:
 
 	top_status.modulate = Color(1, 1, 1, 1)
 	_enter_contract_selection("Nova run iniciada. Escolha um contrato.")
+
+
+func _start_tutorial_run() -> void:
+	_start_new_run()
+	_tutorial_mode = true
+	_tutorial_step = 0
+	_tutorial_move_accum = 0.0
+	_tutorial_paint_time = 0.0
+	_tutorial_refill_time = 0.0
+	_tutorial_last_player_x = 0.0
+	_tutorial_start_color_index = 0
+	_pending_unlock_message = ""
+
+	_selected_contract = _build_tutorial_contract()
+	_start_contract()
+	if player is Node2D:
+		_tutorial_last_player_x = (player as Node2D).global_position.x
+	_tutorial_start_color_index = _selected_color_index
+	_show_tutorial_step_message()
+
+
+func _build_tutorial_contract() -> Dictionary:
+	return {
+		"title": "Tutorial do Capataz",
+		"client": "Mestre da Oficina",
+		"description": "Aprenda os controles basicos para iniciar a sua run.",
+		"duration": 78.0,
+		"target_coverage": 0.62,
+		"fail_coverage": 0.08,
+		"payout": 0,
+		"drop_interval": 1.12,
+		"drop_speed": 122.0,
+		"drop_power": 0.44,
+		"drop_radius": 5.7,
+		"event_frequency": 0.0,
+		"paint_color": _palette[0] if not _palette.is_empty() else Color(0.31, 0.62, 0.90, 1.0),
+		"pattern_mode": "stripe_h",
+		"pattern_colors": [0, 1],
+		"stripe_width_cells": 4,
+		"drop_color": Color(0.73, 0.90, 1.0, 0.92),
+		"initial_min": 0.57,
+		"initial_max": 0.74,
+		"risk_label": "Treino",
+		"danger_score": 0.0,
+	}
+
+
+func _show_tutorial_step_message() -> void:
+	if not _tutorial_mode:
+		return
+
+	match _tutorial_step:
+		0:
+			top_status.text = "Tutorial 1/5: Movimento"
+			center_message.text = "Use A/D para andar pelo canteiro."
+		1:
+			top_status.text = "Tutorial 2/5: Pintura"
+			center_message.text = "Segure Clique esquerdo ou P para pintar o muro."
+		2:
+			top_status.text = "Tutorial 3/5: Troca de cor"
+			center_message.text = "Troque para outra cor com 1-4 ou clicando na paleta."
+		3:
+			top_status.text = "Tutorial 4/5: Recarregar"
+			center_message.text = "Va ao balde e segure E para repor tinta do rolo."
+		_:
+			top_status.text = "Tutorial 5/5: Fechamento"
+			center_message.text = "Atinga a meta e segure o acabamento ate o tempo acabar."
+	center_message.visible = true
+
+
+func _advance_tutorial_step(step: int) -> void:
+	_tutorial_step = step
+	if _tutorial_step == 3 and player.has_method("set_resource_levels"):
+		player.call("set_resource_levels", 0.12, 0.78)
+	_show_tutorial_step_message()
+
+
+func _update_tutorial_flow(delta: float, coverage: float, target: float) -> void:
+	if not _tutorial_mode:
+		return
+
+	if player is Node2D:
+		var px = (player as Node2D).global_position.x
+		_tutorial_move_accum += absf(px - _tutorial_last_player_x)
+		_tutorial_last_player_x = px
+
+	if _tutorial_step == 0:
+		if _tutorial_move_accum >= 130.0:
+			_advance_tutorial_step(1)
+	elif _tutorial_step == 1:
+		if player.has_method("is_painting") and bool(player.call("is_painting")):
+			_tutorial_paint_time += delta
+		if _tutorial_paint_time >= 1.0:
+			_advance_tutorial_step(2)
+	elif _tutorial_step == 2:
+		if _selected_color_index != _tutorial_start_color_index:
+			_advance_tutorial_step(3)
+	elif _tutorial_step == 3:
+		if player.has_method("is_refilling") and bool(player.call("is_refilling")):
+			_tutorial_refill_time += delta
+		if _tutorial_refill_time >= 0.65:
+			_advance_tutorial_step(4)
+	elif _tutorial_step == 4:
+		if coverage >= target:
+			center_message.text = "Perfeito. Mantenha o ritmo ate o fim do cronometro."
+
+
+func _complete_tutorial_run(coverage: float, target: float, lowest: float) -> void:
+	_is_paused = false
+	_state = STATE_RUN_OVER
+	_clear_active_event()
+	_drops.clear()
+	_splashes.clear()
+	_impact_marks.clear()
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
+	if player.has_method("set_game_active"):
+		player.call("set_game_active", false)
+	_set_player_visible(false)
+
+	top_status.text = "Tutorial concluido"
+	top_status.modulate = Color(0.64, 1.0, 0.74, 1.0)
+	center_message.visible = false
+	center_message.text = ""
+	_show_choice_panel()
+	choice_title.text = "Base pronta"
+	choice_body.text = (
+		"Voce concluiu o tutorial.\n\n"
+		+ "Cobertura final: %d%%\n"
+		+ "Meta do treino: %d%%\n"
+		+ "Ponto mais fraco: %d%%\n\n"
+		+ "Agora vale para run completa, com contratos e progressao."
+	) % [
+		int(round(coverage * 100.0)),
+		int(round(target * 100.0)),
+		int(round(lowest * 100.0)),
+	]
+	choice_hint.text = "ENTER/ESPACO inicia run normal | R repete tutorial"
+	_update_sidebar_meta()
+	queue_redraw()
+
+
+func _fail_tutorial_run(reason: String, coverage: float, lowest: float) -> void:
+	_is_paused = false
+	_state = STATE_RUN_OVER
+	_clear_active_event()
+	_drops.clear()
+	_splashes.clear()
+	_impact_marks.clear()
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
+	if player.has_method("set_game_active"):
+		player.call("set_game_active", false)
+	_set_player_visible(false)
+
+	top_status.text = "Tutorial interrompido"
+	top_status.modulate = Color(1.0, 0.62, 0.50, 1.0)
+	center_message.visible = false
+	center_message.text = ""
+	_show_choice_panel()
+	choice_title.text = "Tente de novo"
+	choice_body.text = (
+		"Motivo: %s\n\n"
+		+ "Cobertura final: %d%%\n"
+		+ "Ponto mais fraco: %d%%\n\n"
+		+ "Sem pressa: voce pode repetir o tutorial."
+	) % [
+		reason,
+		int(round(coverage * 100.0)),
+		int(round(lowest * 100.0)),
+	]
+	choice_hint.text = "R repete tutorial | ENTER/ESPACO inicia run normal"
+	_update_sidebar_meta()
+	queue_redraw()
 
 
 func _enter_contract_selection(message: String) -> void:
@@ -970,6 +1217,7 @@ func _pick_contract(index: int) -> void:
 
 
 func _start_contract() -> void:
+	_apply_profile_settings()
 	_is_paused = false
 	_state = STATE_IN_CONTRACT
 	_elapsed = 0.0
@@ -1050,18 +1298,22 @@ func _start_contract() -> void:
 
 	_hide_choice_panel()
 	center_message.visible = true
-	top_status.text = "Contrato: %s | %s" % [
-		_selected_contract.get("title", "Sem nome"),
-		_contract_pattern_label,
-	]
-	center_message.text = "Pinte seguindo o padrao: %s. Salve os pontos criticos quando surgirem." % _contract_pattern_label
+	if _tutorial_mode:
+		_show_tutorial_step_message()
+	else:
+		top_status.text = "Contrato: %s | %s" % [
+			_selected_contract.get("title", "Sem nome"),
+			_contract_pattern_label,
+		]
+		center_message.text = "Pinte seguindo o padrao: %s. Salve os pontos criticos quando surgirem." % _contract_pattern_label
 	_update_sidebar_meta()
 	queue_redraw()
 
 
 func _process_contract(delta: float) -> void:
 	_elapsed += delta
-	_update_event_system(delta)
+	if not _tutorial_mode:
+		_update_event_system(delta)
 	_update_drops(delta)
 
 	var coverage = float(wall.call("get_coverage_ratio"))
@@ -1072,6 +1324,7 @@ func _process_contract(delta: float) -> void:
 	if not _palette.is_empty():
 		_update_color_efficiency(_palette[_selected_color_index])
 	_update_flow_and_focus(delta)
+	_update_tutorial_flow(delta, coverage, target)
 
 	_update_contract_hud(coverage, duration, target)
 	if player.has_method("is_painting") and bool(player.call("is_painting")) and player.has_method("get_roller_position"):
@@ -1100,6 +1353,17 @@ func _process_contract(delta: float) -> void:
 
 
 func _update_flow_and_focus(delta: float) -> void:
+	if _tutorial_mode:
+		_flow_combo = move_toward(_flow_combo, 1.0, delta * 1.2)
+		_flow_peak = maxf(_flow_peak, _flow_combo)
+		_run_peak_flow = maxf(_run_peak_flow, _flow_peak)
+		_focus_zone_active = false
+		_focus_zone_timer = 0.0
+		_focus_zone_duration = 0.0
+		_focus_zone_progress = 0.0
+		_focus_zone_cooldown = 0.0
+		return
+
 	var is_painting = player.has_method("is_painting") and bool(player.call("is_painting"))
 	var roller_pos = Vector2.ZERO
 	var has_roller_pos = false
@@ -1375,6 +1639,12 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 	_update_bar(roller_bar_fill, roller_bar_bg, paint_ratio, Color(0.28, 0.80, 0.94, 1.0))
 	_update_bar(bucket_bar_fill, bucket_bar_bg, bucket_ratio, Color(0.93, 0.67, 0.30, 1.0))
 
+	if _tutorial_mode:
+		risk_value.text = "Treino"
+		event_value.text = "Guiado"
+		_update_sidebar_meta()
+		return
+
 	var flow_text = "Flow x%.1f" % _flow_combo
 	if _focus_zone_active:
 		top_status.text = "Contrato: %s | %s | Critico %d%%" % [
@@ -1419,6 +1689,10 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 
 
 func _complete_contract(coverage: float, target: float, lowest: float) -> void:
+	if _tutorial_mode:
+		_complete_tutorial_run(coverage, target, lowest)
+		return
+
 	_is_paused = false
 	_clear_active_event()
 	_drops.clear()
@@ -1451,16 +1725,42 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_run_day += 1
 	_add_camera_shake(0.10)
 
+	var unlock_lines: Array[String] = []
+	if _app_state != null and _app_state.has_method("register_contract_complete"):
+		var profile_result = _app_state.call("register_contract_complete", _streak)
+		if profile_result is Dictionary:
+			var result_data = profile_result as Dictionary
+			var raw_cosmetics = result_data.get("new_cosmetics", [])
+			if raw_cosmetics is Array:
+				for cosmetic in raw_cosmetics:
+					var cosmetic_id = String(cosmetic)
+					if cosmetic_id.is_empty():
+						continue
+					unlock_lines.append("Visual desbloqueado: %s" % _cosmetic_display_name(cosmetic_id))
+			if bool(result_data.get("special_unlocked", false)):
+				_special_contracts_unlocked = true
+				unlock_lines.append("Contratos especiais desbloqueados.")
+	if unlock_lines.is_empty():
+		_pending_unlock_message = ""
+	else:
+		_pending_unlock_message = "\n" + "\n".join(unlock_lines)
+
 	top_status.text = "Contrato entregue! +C$%d (flow +%d%%)" % [
 		payout,
 		int(round(flow_bonus * 100.0)),
 	]
+	if not unlock_lines.is_empty():
+		top_status.text += " | Desbloqueio!"
 	center_message.visible = false
 	center_message.text = ""
 	_enter_upgrade_selection()
 
 
 func _fail_run(reason: String, coverage: float, lowest: float) -> void:
+	if _tutorial_mode:
+		_fail_tutorial_run(reason, coverage, lowest)
+		return
+
 	_is_paused = false
 	_state = STATE_RUN_OVER
 	_clear_active_event()
@@ -1545,6 +1845,9 @@ func _enter_upgrade_selection() -> void:
 
 	choice_body.text = "\n\n".join(lines)
 	choice_hint.text = "1, 2 ou 3 aplica upgrade."
+	if not _pending_unlock_message.is_empty():
+		choice_hint.text += _pending_unlock_message
+		_pending_unlock_message = ""
 	coverage_title.text = "Cobertura"
 	time_title.text = "Tempo"
 	_update_sidebar_meta()
@@ -1612,11 +1915,18 @@ func _generate_contract_offers() -> Array[Dictionary]:
 	var max_tier = mini(5, 1 + int(floor(float(_run_day + _streak) / 2.2)))
 	var candidates: Array[Dictionary] = []
 	for template in _contract_templates:
+		var is_special = bool(template.get("is_special", false))
+		if is_special and not _special_contracts_unlocked:
+			continue
 		if int(template.get("tier", 1)) <= max_tier + 1:
 			candidates.append(template)
 
 	if candidates.is_empty():
-		candidates = _contract_templates.duplicate(true)
+		for template in _contract_templates:
+			var is_special = bool(template.get("is_special", false))
+			if is_special and not _special_contracts_unlocked:
+				continue
+			candidates.append(template)
 
 	var offers: Array[Dictionary] = []
 	var attempts = 0
@@ -1693,6 +2003,7 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 		"title": template.get("title", "Contrato"),
 		"client": template.get("client", "Cliente"),
 		"description": template.get("description", ""),
+		"is_special": bool(template.get("is_special", false)),
 		"duration": duration,
 		"target_coverage": target,
 		"fail_coverage": fail_threshold,
@@ -1718,13 +2029,14 @@ func _format_contract(index: int, contract: Dictionary) -> String:
 	var pattern_mode = String(contract.get("pattern_mode", "solid"))
 	var pattern_colors = _sanitize_pattern_colors(contract.get("pattern_colors", [0]))
 	var pattern_label = _build_pattern_label(pattern_mode, pattern_colors)
+	var special_tag = " | Especial" if bool(contract.get("is_special", false)) else ""
 	return (
 		"%d) %s  [%s]\n"
 		+ "Cliente: %s | Padrao: %s\n"
 		+ "Tempo %.0fs | Meta %d%% | Ruina %d%% | C$%d"
 	) % [
 		index + 1,
-		contract.get("title", "Contrato"),
+		contract.get("title", "Contrato") + special_tag,
 		contract.get("risk_label", ""),
 		contract.get("client", "Cliente"),
 		pattern_label,
@@ -1733,6 +2045,18 @@ func _format_contract(index: int, contract: Dictionary) -> String:
 		int(round(float(contract.get("fail_coverage", 0.2)) * 100.0)),
 		int(contract.get("payout", 0)),
 	]
+
+
+func _cosmetic_display_name(cosmetic_id: String) -> String:
+	match cosmetic_id:
+		"urban_orange":
+			return "Urbano Laranja"
+		"night_shift":
+			return "Turno da Noite"
+		"executive_clean":
+			return "Executivo Clean"
+		_:
+			return cosmetic_id.capitalize()
 
 
 func _set_player_visible(value: bool) -> void:
@@ -1762,8 +2086,12 @@ func _pause_contract() -> void:
 		player.call("set_game_active", false)
 	_show_choice_panel()
 	choice_title.text = "Pausado"
-	choice_body.text = "Respire, revise sua estrategia e volte quando quiser.\n\nDica: pinte por faixas horizontais e recarregue antes do tanque zerar."
-	choice_hint.text = "ESC retoma | R inicia nova run"
+	if _tutorial_mode:
+		choice_body.text = "Tutorial em pausa.\n\nQuando voltar, siga a etapa mostrada no topo da tela."
+		choice_hint.text = "ESC retoma | R reinicia tutorial"
+	else:
+		choice_body.text = "Respire, revise sua estrategia e volte quando quiser.\n\nDica: pinte por faixas horizontais e recarregue antes do tanque zerar."
+		choice_hint.text = "ESC retoma | R inicia nova run"
 	top_status.text = "PAUSADO"
 	center_message.visible = false
 
@@ -1775,12 +2103,15 @@ func _resume_contract() -> void:
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", true)
 	_hide_choice_panel()
-	top_status.text = "Contrato: %s | %s" % [
-		_selected_contract.get("title", "Sem nome"),
-		_contract_pattern_label,
-	]
-	center_message.visible = true
-	center_message.text = _active_event.get("description", "Continue o retoque.") if not _active_event.is_empty() else "Continue o retoque."
+	if _tutorial_mode:
+		_show_tutorial_step_message()
+	else:
+		top_status.text = "Contrato: %s | %s" % [
+			_selected_contract.get("title", "Sem nome"),
+			_contract_pattern_label,
+		]
+		center_message.visible = true
+		center_message.text = _active_event.get("description", "Continue o retoque.") if not _active_event.is_empty() else "Continue o retoque."
 
 
 func _add_camera_shake(amount: float) -> void:
@@ -1793,7 +2124,7 @@ func _update_camera_effects(delta: float) -> void:
 		position = _base_scene_position
 		return
 	_camera_shake_phase += delta * (24.0 + _camera_shake_strength * 16.0)
-	var amplitude = 6.0 * _camera_shake_strength * _camera_shake_strength
+	var amplitude = minf(3.6, 3.2 * pow(_camera_shake_strength, 1.55))
 	var sx = sin(_camera_shake_phase * 1.9) + sin(_camera_shake_phase * 2.7 + 1.1)
 	var sy = cos(_camera_shake_phase * 1.7) + sin(_camera_shake_phase * 2.4 + 0.6)
 	var dir = Vector2(sx, sy)
@@ -2070,6 +2401,72 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"pattern_presets": [
 				{"mode": "stripe_v", "colors": [1, 0, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.08},
 				{"mode": "checker", "colors": [0, 1, 2, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.09},
+			],
+		},
+		{
+			"is_special": true,
+			"tier": 5,
+			"title": "Opera Prisma",
+			"client": "Prefeitura Central",
+			"description": "Contrato especial com padrao quadruplo e clima imprevisivel.",
+			"duration_min": 70.0,
+			"duration_max": 102.0,
+			"target_min": 0.72,
+			"target_max": 0.86,
+			"fail_min": 0.16,
+			"fail_max": 0.25,
+			"payout_min": 420.0,
+			"payout_max": 620.0,
+			"drop_interval_min": 0.35,
+			"drop_interval_max": 0.55,
+			"drop_speed_min": 210.0,
+			"drop_speed_max": 308.0,
+			"drop_power_min": 1.02,
+			"drop_power_max": 1.56,
+			"drop_radius_min": 8.0,
+			"drop_radius_max": 12.8,
+			"event_min": 0.64,
+			"event_max": 1.0,
+			"paint_color": Color(0.30, 0.62, 0.95, 1.0),
+			"drop_color": Color(0.98, 0.90, 0.76, 0.92),
+			"initial_min": 0.44,
+			"initial_max": 0.66,
+			"pattern_presets": [
+				{"mode": "checker", "colors": [0, 1, 2, 3], "stripe_min": 2, "stripe_max": 2, "target_bonus": 0.10},
+				{"mode": "stripe_h", "colors": [0, 2, 1, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.10},
+			],
+		},
+		{
+			"is_special": true,
+			"tier": 5,
+			"title": "Aeroporto Orion",
+			"client": "Consorcio Orion",
+			"description": "Faixas longas e vento cruzado constante. Contrato de elite.",
+			"duration_min": 74.0,
+			"duration_max": 106.0,
+			"target_min": 0.74,
+			"target_max": 0.87,
+			"fail_min": 0.17,
+			"fail_max": 0.26,
+			"payout_min": 460.0,
+			"payout_max": 680.0,
+			"drop_interval_min": 0.33,
+			"drop_interval_max": 0.52,
+			"drop_speed_min": 224.0,
+			"drop_speed_max": 320.0,
+			"drop_power_min": 1.05,
+			"drop_power_max": 1.62,
+			"drop_radius_min": 8.2,
+			"drop_radius_max": 13.2,
+			"event_min": 0.68,
+			"event_max": 1.0,
+			"paint_color": Color(0.88, 0.36, 0.31, 1.0),
+			"drop_color": Color(0.80, 0.90, 1.0, 0.92),
+			"initial_min": 0.43,
+			"initial_max": 0.65,
+			"pattern_presets": [
+				{"mode": "stripe_v", "colors": [1, 0, 1, 2], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.11},
+				{"mode": "stripe_h", "colors": [3, 2, 1, 0], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.11},
 			],
 		},
 	]

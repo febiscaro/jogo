@@ -1,0 +1,210 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/menu.gd" id="1_2o4r1"]
+
+[node name="Menu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_2o4r1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.10, 0.15, 1)
+
+[node name="BackdropGlow" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.12
+anchor_top = 0.06
+anchor_right = 0.88
+anchor_bottom = 0.30
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.23, 0.40, 0.64, 0.25)
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 0
+offset_left = 340.0
+offset_top = 34.0
+offset_right = 950.0
+offset_bottom = 114.0
+horizontal_alignment = 1
+text = "Pintor do Muro"
+
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 0
+offset_left = 350.0
+offset_top = 100.0
+offset_right = 940.0
+offset_bottom = 132.0
+horizontal_alignment = 1
+text = "Roguelike de contratos"
+
+[node name="LeftPanel" type="Panel" parent="."]
+layout_mode = 0
+offset_left = 70.0
+offset_top = 160.0
+offset_right = 340.0
+offset_bottom = 650.0
+
+[node name="PlayButton" type="Button" parent="LeftPanel"]
+layout_mode = 0
+offset_left = 28.0
+offset_top = 42.0
+offset_right = 242.0
+offset_bottom = 86.0
+text = "Iniciar Run"
+
+[node name="TutorialButton" type="Button" parent="LeftPanel"]
+layout_mode = 0
+offset_left = 28.0
+offset_top = 100.0
+offset_right = 242.0
+offset_bottom = 144.0
+text = "Tutorial"
+
+[node name="OptionsButton" type="Button" parent="LeftPanel"]
+layout_mode = 0
+offset_left = 28.0
+offset_top = 158.0
+offset_right = 242.0
+offset_bottom = 202.0
+text = "Opcoes"
+
+[node name="ExitButton" type="Button" parent="LeftPanel"]
+layout_mode = 0
+offset_left = 28.0
+offset_top = 216.0
+offset_right = 242.0
+offset_bottom = 260.0
+text = "Sair"
+
+[node name="TipLabel" type="Label" parent="LeftPanel"]
+layout_mode = 0
+offset_left = 28.0
+offset_top = 310.0
+offset_right = 242.0
+offset_bottom = 460.0
+text = "Pinte segurando Clique ou P.\nA/D move o pintor.\nE recarrega no balde."
+autowrap_mode = 3
+
+[node name="RightPanel" type="Panel" parent="."]
+layout_mode = 0
+offset_left = 370.0
+offset_top = 160.0
+offset_right = 1210.0
+offset_bottom = 650.0
+
+[node name="ProgressTitle" type="Label" parent="RightPanel"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 24.0
+offset_right = 420.0
+offset_bottom = 58.0
+text = "Perfil e progresso"
+
+[node name="ProgressBody" type="Label" parent="RightPanel"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 70.0
+offset_right = 790.0
+offset_bottom = 454.0
+text = "Carregando progresso..."
+autowrap_mode = 3
+clip_text = true
+
+[node name="OptionsPanel" type="Panel" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 416.0
+offset_top = 186.0
+offset_right = 864.0
+offset_bottom = 550.0
+
+[node name="OptionsTitle" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 18.0
+offset_right = 426.0
+offset_bottom = 54.0
+text = "Opcoes de jogo"
+
+[node name="SensTitle" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 72.0
+offset_right = 280.0
+offset_bottom = 100.0
+text = "Sensibilidade do cursor"
+
+[node name="SensSlider" type="HSlider" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 102.0
+offset_right = 332.0
+offset_bottom = 126.0
+
+[node name="SensValue" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 342.0
+offset_top = 96.0
+offset_right = 420.0
+offset_bottom = 126.0
+text = "x1.00"
+horizontal_alignment = 2
+
+[node name="FxTitle" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 146.0
+offset_right = 280.0
+offset_bottom = 174.0
+text = "Forca de efeitos visuais"
+
+[node name="FxSlider" type="HSlider" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 176.0
+offset_right = 332.0
+offset_bottom = 200.0
+
+[node name="FxValue" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 342.0
+offset_top = 170.0
+offset_right = 420.0
+offset_bottom = 200.0
+text = "x1.00"
+horizontal_alignment = 2
+
+[node name="CosmeticTitle" type="Label" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 228.0
+offset_right = 420.0
+offset_bottom = 254.0
+text = "Visual do pintor"
+
+[node name="CosmeticOption" type="OptionButton" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 258.0
+offset_right = 420.0
+offset_bottom = 294.0
+
+[node name="CloseOptionsButton" type="Button" parent="OptionsPanel"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 314.0
+offset_right = 420.0
+offset_bottom = 348.0
+text = "Fechar"

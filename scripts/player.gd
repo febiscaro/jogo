@@ -23,11 +23,22 @@ extends CharacterBody2D
 @onready var roller: Node2D = $Roller
 @onready var foam: Polygon2D = $Roller/Foam
 @onready var torso: Node2D = get_node_or_null("Torso") as Node2D
+@onready var vest: Node2D = get_node_or_null("Vest") as Node2D
+@onready var vest_stripe_left: Node2D = get_node_or_null("VestStripeLeft") as Node2D
+@onready var vest_stripe_right: Node2D = get_node_or_null("VestStripeRight") as Node2D
+@onready var belt: Node2D = get_node_or_null("Belt") as Node2D
+@onready var belt_buckle: Node2D = get_node_or_null("BeltBuckle") as Node2D
 @onready var head: Node2D = get_node_or_null("Head") as Node2D
+@onready var cap: Node2D = get_node_or_null("Cap") as Node2D
+@onready var helmet_stripe: Node2D = get_node_or_null("HelmetStripe") as Node2D
 @onready var arm_left: Node2D = get_node_or_null("ArmLeft") as Node2D
 @onready var arm_right: Node2D = get_node_or_null("ArmRight") as Node2D
 @onready var leg_left: Node2D = get_node_or_null("LegLeft") as Node2D
 @onready var leg_right: Node2D = get_node_or_null("LegRight") as Node2D
+@onready var knee_pad_left: Node2D = get_node_or_null("KneePadLeft") as Node2D
+@onready var knee_pad_right: Node2D = get_node_or_null("KneePadRight") as Node2D
+@onready var boot_left: Node2D = get_node_or_null("BootLeft") as Node2D
+@onready var boot_right: Node2D = get_node_or_null("BootRight") as Node2D
 @onready var roller_arm: Node2D = get_node_or_null("RollerArm") as Node2D
 
 var _wall: Node = null
@@ -70,6 +81,8 @@ var _roller_max_y: float = -120.0
 var _roller_target_x: float = 26.0
 var _roller_target_y: float = -170.0
 var _facing: float = 1.0
+var _cursor_sensitivity: float = 1.0
+var _cosmetic_profile_id: String = "classic"
 
 
 func _ready() -> void:
@@ -88,6 +101,7 @@ func _ready() -> void:
 		_arm_right_rot = arm_right.rotation
 	if roller_arm != null:
 		_roller_arm_rot = roller_arm.rotation
+	set_cosmetic_profile(_cosmetic_profile_id)
 	_apply_roller_limits()
 
 
@@ -167,6 +181,34 @@ func set_color_efficiency(paint_multiplier: float, drain_multiplier: float) -> v
 	_color_drain_multiplier = maxf(0.5, drain_multiplier)
 
 
+func set_cursor_sensitivity(value: float) -> void:
+	_cursor_sensitivity = clampf(value, 0.55, 1.85)
+
+
+func set_cosmetic_profile(profile_id: String) -> void:
+	_cosmetic_profile_id = profile_id
+	var palette = _cosmetic_palette(profile_id)
+	_set_part_color(torso, palette.get("torso", Color(0.17, 0.34, 0.61, 1.0)))
+	_set_part_color(vest, palette.get("vest", Color(0.96, 0.58, 0.2, 1.0)))
+	_set_part_color(vest_stripe_left, palette.get("vest_stripe", Color(0.98, 0.92, 0.58, 0.94)))
+	_set_part_color(vest_stripe_right, palette.get("vest_stripe", Color(0.98, 0.92, 0.58, 0.94)))
+	_set_part_color(cap, palette.get("cap", Color(0.13, 0.2, 0.33, 1.0)))
+	_set_part_color(helmet_stripe, palette.get("helmet_stripe", Color(0.94, 0.62, 0.26, 1.0)))
+	_set_part_color(leg_left, palette.get("pants", Color(0.14, 0.18, 0.24, 1.0)))
+	_set_part_color(leg_right, palette.get("pants", Color(0.14, 0.18, 0.24, 1.0)))
+	_set_part_color(knee_pad_left, palette.get("knee", Color(0.23, 0.27, 0.35, 1.0)))
+	_set_part_color(knee_pad_right, palette.get("knee", Color(0.23, 0.27, 0.35, 1.0)))
+	_set_part_color(boot_left, palette.get("boot", Color(0.08, 0.1, 0.14, 1.0)))
+	_set_part_color(boot_right, palette.get("boot", Color(0.08, 0.1, 0.14, 1.0)))
+	_set_part_color(belt, palette.get("belt", Color(0.15, 0.17, 0.21, 1.0)))
+	_set_part_color(belt_buckle, palette.get("buckle", Color(0.89, 0.78, 0.45, 1.0)))
+
+
+func set_resource_levels(roller_ratio: float, bucket_ratio: float) -> void:
+	_paint_amount = clampf(_paint_capacity * clampf(roller_ratio, 0.0, 1.0), 0.0, _paint_capacity)
+	_bucket_amount = clampf(_bucket_capacity * clampf(bucket_ratio, 0.0, 1.0), 0.0, _bucket_capacity)
+
+
 func get_paint_ratio() -> float:
 	if _paint_capacity <= 0.0:
 		return 0.0
@@ -230,8 +272,9 @@ func _physics_process(delta: float) -> void:
 
 	_roller_target_x = mouse_target_x
 	_roller_target_y = mouse_target_y
-	roller.position.y = move_toward(roller.position.y, _roller_target_y, roller_move_speed * 1.35 * delta)
-	roller.position.x = move_toward(roller.position.x, _roller_target_x, roller_move_speed * 1.20 * delta)
+	var cursor_response = 0.72 + _cursor_sensitivity * 0.88
+	roller.position.y = move_toward(roller.position.y, _roller_target_y, roller_move_speed * 1.35 * cursor_response * delta)
+	roller.position.x = move_toward(roller.position.x, _roller_target_x, roller_move_speed * 1.20 * cursor_response * delta)
 	roller.scale.x = sign(roller.position.x) if absf(roller.position.x) > 1.0 else _facing
 	var horizontal_ratio = clampf(roller.position.x / maxf(32.0, _roller_max_x), -1.0, 1.0)
 	var roller_target_rot = deg_to_rad(horizontal_ratio * 9.0)
@@ -346,3 +389,67 @@ func _apply_roller_limits() -> void:
 	_roller_target_y = clampf(_roller_target_y, _roller_min_y, _roller_max_y)
 	roller.position.x = _roller_target_x
 	roller.position.y = _roller_target_y
+
+
+func _set_part_color(node: Node2D, color: Color) -> void:
+	if node == null:
+		return
+	if node is Polygon2D:
+		var poly = node as Polygon2D
+		poly.color = color
+
+
+func _cosmetic_palette(profile_id: String) -> Dictionary:
+	match profile_id:
+		"urban_orange":
+			return {
+				"torso": Color(0.20, 0.29, 0.44, 1.0),
+				"vest": Color(0.94, 0.43, 0.18, 1.0),
+				"vest_stripe": Color(0.99, 0.84, 0.42, 0.95),
+				"cap": Color(0.09, 0.14, 0.22, 1.0),
+				"helmet_stripe": Color(0.93, 0.58, 0.22, 1.0),
+				"pants": Color(0.10, 0.14, 0.19, 1.0),
+				"knee": Color(0.20, 0.24, 0.30, 1.0),
+				"boot": Color(0.06, 0.08, 0.11, 1.0),
+				"belt": Color(0.11, 0.13, 0.17, 1.0),
+				"buckle": Color(0.87, 0.70, 0.38, 1.0),
+			}
+		"night_shift":
+			return {
+				"torso": Color(0.06, 0.11, 0.19, 1.0),
+				"vest": Color(0.17, 0.27, 0.39, 1.0),
+				"vest_stripe": Color(0.43, 0.80, 0.96, 0.95),
+				"cap": Color(0.02, 0.05, 0.09, 1.0),
+				"helmet_stripe": Color(0.22, 0.65, 0.92, 1.0),
+				"pants": Color(0.08, 0.11, 0.17, 1.0),
+				"knee": Color(0.16, 0.22, 0.30, 1.0),
+				"boot": Color(0.04, 0.05, 0.09, 1.0),
+				"belt": Color(0.05, 0.07, 0.11, 1.0),
+				"buckle": Color(0.62, 0.79, 0.90, 1.0),
+			}
+		"executive_clean":
+			return {
+				"torso": Color(0.18, 0.36, 0.42, 1.0),
+				"vest": Color(0.88, 0.94, 0.97, 1.0),
+				"vest_stripe": Color(0.25, 0.62, 0.66, 0.95),
+				"cap": Color(0.12, 0.23, 0.27, 1.0),
+				"helmet_stripe": Color(0.79, 0.95, 0.98, 1.0),
+				"pants": Color(0.15, 0.22, 0.24, 1.0),
+				"knee": Color(0.24, 0.31, 0.34, 1.0),
+				"boot": Color(0.06, 0.08, 0.11, 1.0),
+				"belt": Color(0.09, 0.13, 0.15, 1.0),
+				"buckle": Color(0.88, 0.86, 0.70, 1.0),
+			}
+		_:
+			return {
+				"torso": Color(0.17, 0.34, 0.61, 1.0),
+				"vest": Color(0.96, 0.58, 0.2, 1.0),
+				"vest_stripe": Color(0.98, 0.92, 0.58, 0.94),
+				"cap": Color(0.13, 0.2, 0.33, 1.0),
+				"helmet_stripe": Color(0.94, 0.62, 0.26, 1.0),
+				"pants": Color(0.14, 0.18, 0.24, 1.0),
+				"knee": Color(0.23, 0.27, 0.35, 1.0),
+				"boot": Color(0.08, 0.1, 0.14, 1.0),
+				"belt": Color(0.15, 0.17, 0.21, 1.0),
+				"buckle": Color(0.89, 0.78, 0.45, 1.0),
+			}
