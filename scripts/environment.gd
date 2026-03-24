@@ -169,8 +169,8 @@ func _draw_ground_details() -> void:
 		var py = ground_y + 162.0 + sin(_time * 1.4 + float(i) * 0.4) * 2.0
 		var puddle_w = 52.0 + float((i % 3) * 22)
 		var puddle_h = 12.0 + float((i % 2) * 5)
-		draw_ellipse(Vector2(px, py), Vector2(puddle_w, puddle_h), Color(0.58, 0.73, 0.83, 0.13 + _storm_level * 0.14))
-		draw_ellipse(Vector2(px, py - 1.0), Vector2(puddle_w * 0.74, puddle_h * 0.48), Color(0.88, 0.95, 1.0, 0.09 + _storm_level * 0.07))
+		_draw_soft_ellipse(Vector2(px, py), Vector2(puddle_w, puddle_h), Color(0.58, 0.73, 0.83, 0.13 + _storm_level * 0.14), 26)
+		_draw_soft_ellipse(Vector2(px, py - 1.0), Vector2(puddle_w * 0.74, puddle_h * 0.48), Color(0.88, 0.95, 1.0, 0.09 + _storm_level * 0.07), 22)
 
 
 func _draw_wind_lines() -> void:
@@ -216,3 +216,14 @@ func _draw_vignette() -> void:
 	draw_rect(Rect2(0.0, viewport_size.y - edge, viewport_size.x, edge), Color(0.03, 0.04, 0.06, alpha * 1.1))
 	draw_rect(Rect2(0.0, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))
 	draw_rect(Rect2(viewport_size.x - edge, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))
+
+
+func _draw_soft_ellipse(center: Vector2, radii: Vector2, color: Color, points: int = 24) -> void:
+	var safe_points = maxi(8, points)
+	var polygon = PackedVector2Array()
+	var colors = PackedColorArray()
+	for i in range(safe_points):
+		var angle = TAU * float(i) / float(safe_points)
+		polygon.append(center + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
+		colors.append(color)
+	draw_polygon(polygon, colors)
