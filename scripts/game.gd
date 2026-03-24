@@ -36,6 +36,7 @@ const MULTIPLIER_KEYS = [
 
 var _palette: Array[Color] = []
 var _selected_color_index: int = 0
+var color_value: Label
 
 var money_value: Label
 var day_value: Label
@@ -105,6 +106,15 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+func _input(event: InputEvent) -> void:
+	if _state != STATE_IN_CONTRACT:
+		return
+	if event is InputEventMouseButton:
+		var mouse_event = event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			_pick_color_by_mouse(mouse_event.position)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event = event as InputEventKey
@@ -132,11 +142,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			_start_new_run()
 
-	if event is InputEventMouseButton:
-		var mouse_event = event as InputEventMouseButton
-		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed and _state == STATE_IN_CONTRACT:
-			_pick_color_by_mouse(mouse_event.position)
-
 
 func _draw() -> void:
 	for drop in _drops:
@@ -154,35 +159,53 @@ func _draw() -> void:
 
 func _setup_ui() -> void:
 	title_label.text = "Painel"
+	sidebar.self_modulate = Color(0.94, 0.95, 0.96, 0.98)
+	coverage_title.offset_top = 262.0
+	coverage_title.offset_bottom = 284.0
+	coverage_value.offset_top = 286.0
+	coverage_value.offset_bottom = 334.0
+	coverage_value.add_theme_font_size_override("font_size", 36)
+	time_title.offset_top = 352.0
+	time_title.offset_bottom = 374.0
+	time_value.offset_top = 376.0
+	time_value.offset_bottom = 424.0
+	time_value.add_theme_font_size_override("font_size", 36)
 	help_label.layout_mode = 0
 	help_label.offset_left = 20.0
-	help_label.offset_top = 664.0
+	help_label.offset_top = 674.0
 	help_label.offset_right = 180.0
 	help_label.offset_bottom = 698.0
 	help_label.add_theme_font_size_override("font_size", 12)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "WASD mover | 1-4 cor | Clique na paleta"
+	help_label.text = "WASD mover | 1-4 troca cor"
 
-	money_value = _ensure_stat_label("MoneyValue", 20.0, 414.0, 180.0, 438.0, 17)
-	day_value = _ensure_stat_label("DayValue", 20.0, 452.0, 180.0, 476.0, 17)
-	streak_value = _ensure_stat_label("StreakValue", 20.0, 490.0, 180.0, 514.0, 17)
-	paint_value = _ensure_stat_label("PaintValue", 20.0, 528.0, 180.0, 552.0, 17)
-	risk_value = _ensure_stat_label("RiskValue", 20.0, 566.0, 180.0, 590.0, 15)
-	event_value = _ensure_stat_label("EventValue", 20.0, 604.0, 180.0, 628.0, 15)
+	for swatch in [swatch_blue, swatch_orange, swatch_green, swatch_purple]:
+		swatch.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	_ensure_stat_label("MoneyTitle", 20.0, 394.0, 180.0, 414.0, 12).text = "Creditos"
-	_ensure_stat_label("DayTitle", 20.0, 432.0, 180.0, 452.0, 12).text = "Dia da run"
-	_ensure_stat_label("StreakTitle", 20.0, 470.0, 180.0, 490.0, 12).text = "Streak"
-	_ensure_stat_label("PaintTitle", 20.0, 508.0, 180.0, 528.0, 12).text = "Tanque"
-	_ensure_stat_label("RiskTitle", 20.0, 546.0, 180.0, 566.0, 12).text = "Risco"
-	_ensure_stat_label("EventTitle", 20.0, 584.0, 180.0, 604.0, 12).text = "Evento"
+	_ensure_stat_label("ColorTitle", 20.0, 206.0, 180.0, 226.0, 12).text = "Cor ativa"
+	color_value = _ensure_stat_label("ColorValue", 20.0, 226.0, 180.0, 252.0, 16)
 
-	choice_panel = _ensure_panel("ChoicePanel", 300.0, 90.0, 1220.0, 620.0)
-	choice_panel.self_modulate = Color(0.95, 0.96, 0.98, 0.95)
-	choice_title = _ensure_panel_label(choice_panel, "ChoiceTitle", 24.0, 20.0, 796.0, 56.0, 28)
-	choice_body = _ensure_panel_label(choice_panel, "ChoiceBody", 24.0, 76.0, 796.0, 460.0, 19)
+	money_value = _ensure_stat_label("MoneyValue", 20.0, 460.0, 180.0, 486.0, 18)
+	day_value = _ensure_stat_label("DayValue", 20.0, 498.0, 180.0, 524.0, 18)
+	streak_value = _ensure_stat_label("StreakValue", 20.0, 536.0, 180.0, 562.0, 18)
+	paint_value = _ensure_stat_label("PaintValue", 20.0, 574.0, 180.0, 600.0, 18)
+	risk_value = _ensure_stat_label("RiskValue", 20.0, 612.0, 180.0, 636.0, 15)
+	event_value = _ensure_stat_label("EventValue", 20.0, 638.0, 180.0, 662.0, 15)
+
+	_ensure_stat_label("MoneyTitle", 20.0, 440.0, 180.0, 460.0, 12).text = "Creditos"
+	_ensure_stat_label("DayTitle", 20.0, 478.0, 180.0, 498.0, 12).text = "Dia da run"
+	_ensure_stat_label("StreakTitle", 20.0, 516.0, 180.0, 536.0, 12).text = "Streak"
+	_ensure_stat_label("PaintTitle", 20.0, 554.0, 180.0, 574.0, 12).text = "Tanque"
+	_ensure_stat_label("RiskTitle", 20.0, 592.0, 180.0, 612.0, 12).text = "Risco"
+	_ensure_stat_label("EventTitle", 20.0, 618.0, 180.0, 638.0, 12).text = "Evento"
+
+	choice_panel = _ensure_panel("ChoicePanel", 288.0, 82.0, 1232.0, 632.0)
+	choice_panel.self_modulate = Color(0.93, 0.94, 0.96, 1.0)
+	choice_title = _ensure_panel_label(choice_panel, "ChoiceTitle", 24.0, 18.0, 910.0, 56.0, 24)
+	choice_body = _ensure_panel_label(choice_panel, "ChoiceBody", 24.0, 74.0, 910.0, 508.0, 13)
+	choice_body.clip_text = true
 	choice_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	choice_hint = _ensure_panel_label(choice_panel, "ChoiceHint", 24.0, 476.0, 796.0, 518.0, 16)
+	choice_hint = _ensure_panel_label(choice_panel, "ChoiceHint", 24.0, 516.0, 910.0, 546.0, 14)
 
 	top_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -291,6 +314,9 @@ func _set_selected_color(index: int) -> void:
 		return
 	_selected_color_index = clampi(index, 0, _palette.size() - 1)
 	var selected_color = _palette[_selected_color_index]
+	if color_value != null:
+		color_value.text = _get_palette_name(_selected_color_index)
+		color_value.modulate = selected_color
 
 	if wall.has_method("set_paint_color"):
 		wall.call("set_paint_color", selected_color)
@@ -305,8 +331,23 @@ func _refresh_palette_visuals() -> void:
 	for i in range(swatches.size()):
 		if i == _selected_color_index:
 			swatches[i].self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+			swatches[i].scale = Vector2(1.06, 1.06)
 		else:
 			swatches[i].self_modulate = Color(0.76, 0.76, 0.76, 0.95)
+			swatches[i].scale = Vector2.ONE
+
+
+func _get_palette_name(index: int) -> String:
+	match index:
+		0:
+			return "Azul"
+		1:
+			return "Laranja"
+		2:
+			return "Verde"
+		3:
+			return "Roxo"
+	return "Cor"
 
 
 func _start_new_run() -> void:
@@ -341,6 +382,7 @@ func _enter_contract_selection(message: String) -> void:
 	_drops.clear()
 	_contracts_offered = _generate_contract_offers()
 	_selected_contract = {}
+	_set_player_visible(false)
 
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
@@ -351,11 +393,14 @@ func _enter_contract_selection(message: String) -> void:
 	coverage_value.text = "--"
 	time_title.text = "Tempo"
 	time_value.text = "--"
+	color_value.text = "--"
+	color_value.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	risk_value.text = "-"
 	event_value.text = "Planejando"
 
 	top_status.text = message
-	center_message.text = "Use 1, 2 ou 3 para aceitar contrato."
+	center_message.visible = false
+	center_message.text = ""
 	_show_contract_choices()
 	_update_sidebar_meta()
 	queue_redraw()
@@ -371,7 +416,7 @@ func _show_contract_choices() -> void:
 		lines.append(_format_contract(i, contract))
 
 	choice_body.text = "\n\n".join(lines)
-	choice_hint.text = "1/2/3: selecionar contrato  |  Roguelike: se quebrar a run, volta do zero."
+	choice_hint.text = "1, 2 ou 3 seleciona contrato."
 
 
 func _pick_contract(index: int) -> void:
@@ -401,6 +446,16 @@ func _start_contract() -> void:
 	elif wall.has_method("set_paint_color"):
 		wall.call("set_paint_color", config["paint_color"])
 
+	var wall_rect: Rect2 = wall.call("get_wall_rect_global")
+	if player.has_method("set_move_bounds_from_wall"):
+		player.call("set_move_bounds_from_wall", wall_rect)
+	if player is Node2D:
+		var player_node = player as Node2D
+		player_node.global_position = Vector2(
+			wall_rect.position.x + (wall_rect.size.x * 0.5),
+			wall_rect.end.y + 96.0
+		)
+
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", true)
 	if player.has_method("apply_run_modifiers"):
@@ -419,10 +474,12 @@ func _start_contract() -> void:
 		swatch_purple.color,
 	]
 	_set_selected_color(0)
+	_set_player_visible(true)
 
 	choice_panel.visible = false
+	center_message.visible = true
 	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
-	center_message.text = "Pinte sem parar (1-4 troca cor) e sobreviva ao clima."
+	center_message.text = "Pinte todo o muro. Teclas 1-4 ou clique para trocar cor."
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -444,7 +501,7 @@ func _process_contract(delta: float) -> void:
 	var total_cells = maxi(1, int(wall.call("get_total_cells")))
 	var fracture_ratio = float(bad_cells) / float(total_cells)
 
-	if coverage <= fail_threshold or fracture_ratio >= 0.90:
+	if coverage <= fail_threshold or fracture_ratio >= 0.94:
 		_fail_run("O muro cedeu sob a chuva acida.", coverage, lowest)
 		return
 
@@ -461,7 +518,7 @@ func _process_contract(delta: float) -> void:
 func _update_drops(delta: float) -> void:
 	var wall_rect: Rect2 = wall.call("get_wall_rect_global")
 	var duration = maxf(1.0, float(_selected_contract.get("duration", 60.0)))
-	var pressure = 1.0 + (_elapsed / duration) * 0.25 + float(maxi(0, _run_day - 1)) * 0.03
+	var pressure = 1.0 + (_elapsed / duration) * 0.20 + float(maxi(0, _run_day - 1)) * 0.02
 	var event_spawn_mult = _event_value("spawn_mult", 1.0)
 	var event_speed_mult = _event_value("speed_mult", 1.0)
 	var event_radius_mult = _event_value("radius_mult", 1.0)
@@ -470,7 +527,7 @@ func _update_drops(delta: float) -> void:
 	var drop_interval_mult = float(_run_modifiers.get("drop_interval_mult", 1.0))
 
 	var base_interval = float(_selected_contract.get("drop_interval", 0.52))
-	var spawn_interval = maxf(0.16, (base_interval * drop_interval_mult) / (pressure * event_spawn_mult))
+	var spawn_interval = maxf(0.22, (base_interval * drop_interval_mult) / (pressure * event_spawn_mult))
 
 	_drop_timer -= delta
 	while _drop_timer <= 0.0:
@@ -478,7 +535,7 @@ func _update_drops(delta: float) -> void:
 		_drop_timer += spawn_interval
 
 	var melt_resist = clampf(float(_run_modifiers.get("melt_resist", 0.0)), 0.0, 0.82)
-	var damage_scale = maxf(0.05, event_damage_mult * (1.0 - melt_resist) * 0.32)
+	var damage_scale = maxf(0.04, event_damage_mult * (1.0 - melt_resist) * 0.22)
 
 	for i in range(_drops.size() - 1, -1, -1):
 		var drop: Dictionary = _drops[i]
@@ -576,7 +633,7 @@ func _event_value(key: String, default_value: float) -> float:
 
 
 func _update_contract_hud(coverage: float, duration: float, target: float) -> void:
-	coverage_title.text = "Cobertura (meta %d%%)" % int(round(target * 100.0))
+	coverage_title.text = "Meta: %d%%" % int(round(target * 100.0))
 	coverage_value.text = "%d%%" % int(round(coverage * 100.0))
 	var remaining = maxf(0.0, duration - _elapsed)
 	time_title.text = "Tempo restante"
@@ -596,6 +653,7 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_drops.clear()
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
+	_set_player_visible(false)
 
 	var base_payout = int(_selected_contract.get("payout", 100))
 	var quality = clampf((coverage - target) * 2.4, 0.0, 0.9)
@@ -611,7 +669,8 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_run_day += 1
 
 	top_status.text = "Contrato entregue! +C$%d" % payout
-	center_message.text = "Excelente. Agora escolha um upgrade para a run."
+	center_message.visible = false
+	center_message.text = ""
 	_enter_upgrade_selection()
 
 
@@ -621,6 +680,7 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 	_drops.clear()
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
+	_set_player_visible(false)
 
 	_meta_total_runs += 1
 	_meta_total_credits += _run_credits_earned
@@ -630,7 +690,8 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 
 	top_status.text = "RUN QUEBRADA"
 	top_status.modulate = Color(1.0, 0.48, 0.44, 1.0)
-	center_message.text = "Pressione R, ENTER ou ESPACO para iniciar nova run."
+	center_message.visible = false
+	center_message.text = ""
 
 	choice_panel.visible = true
 	choice_title.text = "Resumo da Run"
@@ -667,6 +728,8 @@ func _enter_upgrade_selection() -> void:
 		return
 
 	_state = STATE_UPGRADE_SELECT
+	_set_player_visible(false)
+	center_message.visible = false
 	choice_panel.visible = true
 	choice_title.text = "Escolha Um Upgrade"
 
@@ -676,7 +739,7 @@ func _enter_upgrade_selection() -> void:
 		lines.append("%d) %s\n%s" % [i + 1, upgrade.get("name", "Upgrade"), upgrade.get("description", "")])
 
 	choice_body.text = "\n\n".join(lines)
-	choice_hint.text = "1/2/3: aplicar upgrade e continuar a run"
+	choice_hint.text = "1, 2 ou 3 aplica upgrade."
 	coverage_title.text = "Cobertura"
 	time_title.text = "Tempo"
 	_update_sidebar_meta()
@@ -689,7 +752,6 @@ func _pick_upgrade(index: int) -> void:
 	var upgrade: Dictionary = _upgrades_offered[index]
 	_apply_upgrade(upgrade)
 	top_status.text = "Upgrade ativo: %s" % upgrade.get("name", "")
-	center_message.text = "Run fortalecida. Novos contratos liberados."
 	_enter_contract_selection("Escolha o proximo contrato.")
 
 
@@ -817,23 +879,23 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 
 func _format_contract(index: int, contract: Dictionary) -> String:
 	return (
-		"%d) %s  |  %s\n"
-		+ "Cliente: %s\n"
-		+ "Tempo: %.0fs  Meta: %d%%  Ruina: %d%%\n"
-		+ "Pagamento: C$%d  |  Risco: %s\n"
-		+ "%s"
+		"%d) %s | %s\n"
+		+ "Tempo %.0fs | Meta %d%% | Ruina %d%% | C$%d"
 	) % [
 		index + 1,
 		contract.get("title", "Contrato"),
 		contract.get("risk_label", ""),
-		contract.get("client", "Cliente"),
 		float(contract.get("duration", 60.0)),
 		int(round(float(contract.get("target_coverage", 0.7)) * 100.0)),
 		int(round(float(contract.get("fail_coverage", 0.2)) * 100.0)),
 		int(contract.get("payout", 0)),
-		contract.get("risk_label", ""),
-		contract.get("description", ""),
 	]
+
+
+func _set_player_visible(value: bool) -> void:
+	if player is CanvasItem:
+		var canvas_player = player as CanvasItem
+		canvas_player.visible = value
 
 
 func _update_sidebar_meta() -> void:

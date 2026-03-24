@@ -1,12 +1,12 @@
 extends CharacterBody2D
 
 @export var base_speed: float = 290.0
-@export var move_bounds: Rect2 = Rect2(250.0, 430.0, 840.0, 220.0)
-@export var base_paint_radius: float = 66.0
-@export var base_paint_strength_per_second: float = 4.0
-@export var base_paint_capacity: float = 220.0
-@export var base_paint_regen_per_second: float = 30.0
-@export var base_paint_drain_per_second: float = 7.0
+@export var move_bounds: Rect2 = Rect2(260.0, 130.0, 820.0, 520.0)
+@export var base_paint_radius: float = 78.0
+@export var base_paint_strength_per_second: float = 6.2
+@export var base_paint_capacity: float = 260.0
+@export var base_paint_regen_per_second: float = 36.0
+@export var base_paint_drain_per_second: float = 5.2
 
 @onready var roller: Node2D = $Roller
 @onready var foam: Polygon2D = $Roller/Foam
@@ -54,6 +54,18 @@ func apply_run_modifiers(modifiers: Dictionary) -> void:
 
 func refill_paint() -> void:
 	_paint_amount = _paint_capacity
+
+
+func set_move_bounds_from_wall(wall_rect: Rect2) -> void:
+	var margin_x = 42.0
+	var top = wall_rect.position.y + 24.0
+	var bottom = wall_rect.end.y + 230.0
+	move_bounds = Rect2(
+		wall_rect.position.x - margin_x,
+		top,
+		wall_rect.size.x + (margin_x * 2.0),
+		maxf(120.0, bottom - top)
+	)
 
 
 func set_paint_color(color: Color) -> void:
