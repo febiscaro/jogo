@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 @export var base_speed: float = 300.0
 @export var move_bounds: Rect2 = Rect2(260.0, 130.0, 820.0, 520.0)
-@export var base_paint_radius: float = 82.0
+@export var base_paint_radius: float = 24.0
 @export var base_paint_strength_per_second: float = 6.5
 @export var base_paint_capacity: float = 220.0
 @export var base_paint_regen_per_second: float = 38.0
@@ -89,6 +89,7 @@ func apply_run_modifiers(modifiers: Dictionary) -> void:
 
 	_speed = (base_speed + float(modifiers.get("speed_add", 0.0))) * float(modifiers.get("speed_mult", 1.0))
 	_paint_radius = (base_paint_radius + float(modifiers.get("paint_radius_add", 0.0))) * float(modifiers.get("paint_radius_mult", 1.0))
+	_paint_radius = clampf(_paint_radius, 16.0, 32.0)
 	_paint_strength = (base_paint_strength_per_second + float(modifiers.get("paint_strength_add", 0.0))) * float(modifiers.get("paint_strength_mult", 1.0))
 	_paint_capacity = (base_paint_capacity + float(modifiers.get("paint_capacity_add", 0.0))) * float(modifiers.get("paint_capacity_mult", 1.0))
 	_paint_regen = (base_paint_regen_per_second + float(modifiers.get("paint_regen_add", 0.0))) * float(modifiers.get("paint_regen_mult", 1.0))
@@ -228,7 +229,8 @@ func _physics_process(delta: float) -> void:
 			_is_refilling = true
 
 	var did_paint = false
-	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0 and not _is_refilling:
+	var wants_paint = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_key_pressed(KEY_P)
+	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0 and not _is_refilling and wants_paint:
 		var tank_ratio = clampf(_paint_amount / maxf(1.0, _paint_capacity), 0.12, 1.0)
 		var paint_strength = _paint_strength * _external_paint_multiplier * _color_paint_multiplier * tank_ratio
 		did_paint = bool(_wall.call("paint_at", foam.global_position, _paint_radius, paint_strength * delta))

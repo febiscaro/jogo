@@ -279,7 +279,7 @@ func _setup_ui() -> void:
 	help_label.offset_bottom = 700.0
 	help_label.add_theme_font_size_override("font_size", 10)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "A/D move | W/S rolo | E recarrega\n1-4 cor | ESC pausa"
+	help_label.text = "A/D move | W/S rolo | Segure clique ou P pinta\nE recarrega | 1-4 cor | ESC pausa"
 	_style_label(title_label, Color(0.95, 0.98, 1.0, 1.0), 2, Color(0.08, 0.11, 0.17, 0.9))
 	_style_label(coverage_title, Color(0.77, 0.88, 0.99, 1.0))
 	_style_label(time_title, Color(0.77, 0.88, 0.99, 1.0))
@@ -1742,8 +1742,8 @@ func _build_upgrade_catalog() -> Array[Dictionary]:
 		{
 			"id": "wide_roller",
 			"name": "Rolo Extra Largo",
-			"description": "A area de retoque aumenta bastante.",
-			"effects": {"paint_radius_add": 14.0},
+			"description": "A area de retoque aumenta um pouco sem perder precisao.",
+			"effects": {"paint_radius_add": 8.0},
 		},
 		{
 			"id": "fast_stride",
