@@ -14,6 +14,10 @@ extends Node2D
 @export var drip_spread: float = 0.58
 @export var drip_loss_rate: float = 0.06
 @export var guide_alpha: float = 0.20
+@export var texture_strength: float = 0.34
+@export var wet_specular_strength: float = 0.28
+@export var grime_strength: float = 0.22
+@export var frame_wear: float = 0.30
 
 var _columns: int = 0
 var _rows: int = 0
@@ -302,8 +306,14 @@ func _draw() -> void:
 			var cell_paint = _cell_paint_color[index]
 			var tint = base_color.lerp(cell_paint, coverage)
 			var noise = _get_cell_noise(col, row)
-			tint = tint.lightened(noise * 0.22)
-			tint = tint.darkened((1.0 - coverage) * 0.08)
+			var texture_mod = 1.0 + noise * texture_strength * 0.16
+			tint = Color(
+				clampf(tint.r * texture_mod, 0.0, 1.0),
+				clampf(tint.g * texture_mod, 0.0, 1.0),
+				clampf(tint.b * texture_mod, 0.0, 1.0),
+				1.0
+			)
+			tint = tint.darkened((1.0 - coverage) * 0.10 + absf(noise) * 0.04)
 
 			var cell_pos = Vector2(float(col) * cell_size, float(row) * cell_size)
 			var cell_w = minf(cell_size, wall_size.x - cell_pos.x)
@@ -313,19 +323,51 @@ func _draw() -> void:
 
 			var cell_rect = Rect2(cell_pos, Vector2(cell_w, cell_h))
 			draw_rect(cell_rect, tint)
+			var top_band_h = maxf(1.0, cell_h * 0.14)
+			var bottom_band_h = maxf(1.0, cell_h * 0.16)
+			draw_rect(
+				Rect2(cell_rect.position, Vector2(cell_w, top_band_h)),
+				Color(1.0, 1.0, 1.0, 0.04 + coverage * 0.04 + maxf(0.0, noise) * 0.05)
+			)
+			draw_rect(
+				Rect2(cell_rect.position + Vector2(0.0, cell_h - bottom_band_h), Vector2(cell_w, bottom_band_h)),
+				Color(0.0, 0.0, 0.0, 0.03 + (1.0 - coverage) * 0.06)
+			)
 			if cell_w > 2.0 and cell_h > 2.0:
-				draw_rect(cell_rect, mortar_color, false, 1.0)
+				draw_rect(
+					cell_rect,
+					Color(mortar_color.r, mortar_color.g, mortar_color.b, mortar_color.a * (0.46 + (1.0 - coverage) * 0.45)),
+					false,
+					1.0
+				)
+
+			if coverage > 0.58 and (_drip_intensity > 0.14 or _damage_heat > 0.12):
+				var glint = 0.04 + (_drip_intensity * wet_specular_strength * 0.10) + maxf(0.0, noise) * 0.03
+				draw_line(
+					cell_rect.position + Vector2(cell_w * 0.28, cell_h * 0.18),
+					cell_rect.position + Vector2(cell_w * 0.72, cell_h * 0.88),
+					Color(0.96, 0.98, 1.0, glint),
+					1.0
+				)
 
 			if coverage < 0.28 and (col + row) % 2 == 0:
 				_draw_cell_cracks(cell_rect, coverage)
 			if coverage < 0.44 and (col * 7 + row * 5) % 9 == 0:
 				var streak_top = cell_rect.position + Vector2(cell_rect.size.x * 0.5, cell_rect.size.y * 0.35)
 				var streak_len = 6.0 + (1.0 - coverage) * 14.0
-				draw_line(streak_top, streak_top + Vector2(0.0, streak_len), Color(grime_color.r, grime_color.g, grime_color.b, 0.28), 1.0)
+				draw_line(
+					streak_top,
+					streak_top + Vector2(0.0, streak_len),
+					Color(grime_color.r, grime_color.g, grime_color.b, 0.18 + grime_strength * 0.24),
+					1.0
+				)
 
+	_draw_surface_grime_overlay()
+	_draw_wet_streaks()
 	_draw_pattern_guides()
 	_draw_weakest_marker()
 	_draw_shine()
+	_draw_frame_ambient_occlusion()
 	_draw_frame_details()
 
 
@@ -521,8 +563,8 @@ func _draw_weakest_marker() -> void:
 
 
 func _draw_wall_base() -> void:
-	var top = base_color.lightened(0.12)
-	var bottom = base_color.darkened(0.14)
+	var top = base_color.lightened(0.10)
+	var bottom = base_color.darkened(0.18)
 	var poly = PackedVector2Array(
 		[
 			Vector2.ZERO,
@@ -533,11 +575,24 @@ func _draw_wall_base() -> void:
 	)
 	draw_polygon(poly, PackedColorArray([top, top, bottom, bottom]))
 
+	var stain_bands = 8
+	for i in range(stain_bands):
+		var t = float(i) / float(maxi(1, stain_bands - 1))
+		var y = lerpf(10.0, wall_size.y - 10.0, t)
+		var wobble = sin(_anim_time * 0.2 + t * 13.0) * 8.0
+		var alpha = 0.018 + absf(sin(t * 8.0)) * 0.028
+		draw_line(
+			Vector2(12.0 + wobble, y),
+			Vector2(wall_size.x - 12.0 + wobble * 0.5, y + sin(t * 9.0) * 2.0),
+			Color(0.07, 0.08, 0.10, alpha),
+			1.0
+		)
+
 
 func _draw_shine() -> void:
-	var wetness = clampf(_avg_coverage, 0.0, 1.0)
+	var wetness = clampf(_avg_coverage + _drip_intensity * 0.16, 0.0, 1.0)
 	var band_x = fmod(_anim_time * 65.0, wall_size.x + 240.0) - 120.0
-	var shine_alpha = 0.06 + wetness * 0.14
+	var shine_alpha = 0.04 + wetness * 0.11 + _drip_intensity * wet_specular_strength * 0.10
 	var p1 = Vector2(band_x - 40.0, 0.0)
 	var p2 = Vector2(band_x + 10.0, 0.0)
 	var p3 = Vector2(band_x + 90.0, wall_size.y)
@@ -555,6 +610,49 @@ func _draw_shine() -> void:
 	)
 
 
+func _draw_surface_grime_overlay() -> void:
+	var amount = int(8 + wall_size.x / 120.0)
+	for i in range(amount):
+		var t = float(i) / float(maxi(1, amount - 1))
+		var x = lerpf(18.0, wall_size.x - 18.0, t) + sin(t * 17.0 + _anim_time * 0.24) * 9.0
+		var top = 14.0 + absf(sin(t * 6.7)) * 22.0
+		var length = wall_size.y * (0.24 + absf(cos(t * 4.2)) * 0.46)
+		var alpha = 0.024 + grime_strength * 0.065 + _damage_heat * 0.018
+		draw_line(
+			Vector2(x, top),
+			Vector2(x + sin(_anim_time * 0.6 + t * 9.0) * 6.0, top + length),
+			Color(grime_color.r, grime_color.g, grime_color.b, alpha),
+			1.1
+		)
+
+
+func _draw_wet_streaks() -> void:
+	if _drip_intensity <= 0.06 and _damage_heat <= 0.04:
+		return
+	var wet = clampf(_drip_intensity * 0.62 + _damage_heat * 0.28, 0.0, 1.0)
+	var amount = int(12 + wet * 36.0)
+	for i in range(amount):
+		var seed = float(i) * 0.79
+		var x = 10.0 + fmod(seed * 61.0 + _anim_time * 11.0, wall_size.x - 20.0)
+		var y = fmod(seed * 31.0 + _anim_time * 29.0, wall_size.y * 0.34)
+		var len = 16.0 + fmod(seed * 47.0, wall_size.y * 0.58)
+		var alpha = 0.05 + wet * 0.14
+		draw_line(
+			Vector2(x, y),
+			Vector2(x + sin(seed + _anim_time * 1.2) * 6.0, minf(wall_size.y - 8.0, y + len)),
+			Color(0.86, 0.93, 0.98, alpha),
+			1.0 + wet * 0.4
+		)
+
+
+func _draw_frame_ambient_occlusion() -> void:
+	var shadow_alpha = 0.12 + _drip_intensity * 0.06
+	draw_rect(Rect2(0.0, 0.0, wall_size.x, 12.0), Color(0.0, 0.0, 0.0, shadow_alpha))
+	draw_rect(Rect2(0.0, wall_size.y - 12.0, wall_size.x, 12.0), Color(0.0, 0.0, 0.0, shadow_alpha * 1.15))
+	draw_rect(Rect2(0.0, 0.0, 10.0, wall_size.y), Color(0.0, 0.0, 0.0, shadow_alpha * 0.7))
+	draw_rect(Rect2(wall_size.x - 10.0, 0.0, 10.0, wall_size.y), Color(0.0, 0.0, 0.0, shadow_alpha * 0.7))
+
+
 func _draw_cell_cracks(cell_rect: Rect2, coverage: float) -> void:
 	var crack_alpha = clampf((0.34 - coverage) * 1.8, 0.06, 0.42)
 	var crack_color = Color(0.16, 0.16, 0.18, crack_alpha)
@@ -565,15 +663,21 @@ func _draw_cell_cracks(cell_rect: Rect2, coverage: float) -> void:
 
 
 func _draw_frame_details() -> void:
-	draw_rect(Rect2(Vector2(-8.0, -8.0), wall_size + Vector2(16.0, 16.0)), Color(0.02, 0.03, 0.06, 0.22), false, 8.0)
+	draw_rect(Rect2(Vector2(-9.0, -9.0), wall_size + Vector2(18.0, 18.0)), Color(0.02, 0.03, 0.06, 0.28), false, 9.0)
 	draw_rect(Rect2(Vector2.ZERO, wall_size), frame_color, false, 6.0)
-	draw_rect(Rect2(Vector2(3.0, 3.0), wall_size - Vector2(6.0, 6.0)), Color(0.93, 0.95, 1.0, 0.07), false, 2.0)
+	draw_rect(Rect2(Vector2(2.0, 2.0), wall_size - Vector2(4.0, 4.0)), Color(1.0, 1.0, 1.0, 0.08), false, 1.6)
+	draw_rect(Rect2(Vector2(6.0, 6.0), wall_size - Vector2(12.0, 12.0)), Color(0.0, 0.0, 0.0, 0.16), false, 1.4)
 
 	for i in range(6):
 		var t = float(i) / 5.0
 		var x = lerpf(16.0, wall_size.x - 16.0, t)
-		draw_circle(Vector2(x, 7.0), 2.2, Color(0.62, 0.64, 0.68, 0.65))
-		draw_circle(Vector2(x, wall_size.y - 7.0), 2.2, Color(0.62, 0.64, 0.68, 0.65))
+		var bolt_top = Vector2(x, 7.0)
+		var bolt_bottom = Vector2(x, wall_size.y - 7.0)
+		var rust_alpha = frame_wear * (0.12 + absf(sin(_anim_time * 0.4 + t * 4.0)) * 0.08)
+		draw_circle(bolt_top, 2.2, Color(0.62, 0.64, 0.68, 0.68))
+		draw_circle(bolt_bottom, 2.2, Color(0.62, 0.64, 0.68, 0.68))
+		draw_circle(bolt_top + Vector2(0.0, 1.5), 3.2, Color(0.42, 0.24, 0.16, rust_alpha))
+		draw_circle(bolt_bottom + Vector2(0.0, 1.5), 3.2, Color(0.42, 0.24, 0.16, rust_alpha))
 
 
 func _get_cell_noise(col: int, row: int) -> float:
