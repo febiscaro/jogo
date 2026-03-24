@@ -54,7 +54,10 @@ func _draw() -> void:
 	_draw_city_layers()
 	_draw_clouds()
 	_draw_ground()
+	_draw_ground_details()
 	_draw_wind_lines()
+	_draw_rain_overlay()
+	_draw_vignette()
 
 
 func _draw_sky() -> void:
@@ -148,6 +151,28 @@ func _draw_ground() -> void:
 		draw_rect(Rect2(lane_x, lane_top + 28.0, 38.0, 4.0), Color(0.95, 0.88, 0.62, 0.24))
 
 
+func _draw_ground_details() -> void:
+	for i in range(24):
+		var x = float(i) * 56.0 + fmod(_time * 6.0, 54.0)
+		var base_y = ground_y + 18.0 + sin(float(i) * 0.7) * 4.0
+		var blade_h = 20.0 + float((i * 9) % 14)
+		var sway = sin(_time * 1.8 + float(i) * 0.6) * (3.0 + _storm_level * 5.0)
+		draw_line(
+			Vector2(x, base_y),
+			Vector2(x + sway, base_y - blade_h),
+			Color(0.42, 0.55, 0.38, 0.36),
+			1.7
+		)
+
+	for i in range(7):
+		var px = 90.0 + float(i) * 170.0 + sin(_time * 0.9 + float(i)) * 6.0
+		var py = ground_y + 162.0 + sin(_time * 1.4 + float(i) * 0.4) * 2.0
+		var puddle_w = 52.0 + float((i % 3) * 22)
+		var puddle_h = 12.0 + float((i % 2) * 5)
+		draw_ellipse(Vector2(px, py), Vector2(puddle_w, puddle_h), Color(0.58, 0.73, 0.83, 0.13 + _storm_level * 0.14))
+		draw_ellipse(Vector2(px, py - 1.0), Vector2(puddle_w * 0.74, puddle_h * 0.48), Color(0.88, 0.95, 1.0, 0.09 + _storm_level * 0.07))
+
+
 func _draw_wind_lines() -> void:
 	if _storm_level <= 0.04:
 		return
@@ -164,3 +189,30 @@ func _draw_wind_lines() -> void:
 			Color(0.86, 0.93, 1.0, 0.11 + _storm_level * 0.15),
 			1.3
 		)
+
+
+func _draw_rain_overlay() -> void:
+	if _storm_level < 0.12:
+		return
+
+	var streak_count = int(42 + _storm_level * 120.0)
+	for i in range(streak_count):
+		var seed = float(i) * 1.37
+		var x = fmod(seed * 97.0 + _time * (420.0 + _storm_level * 220.0), viewport_size.x + 200.0) - 100.0
+		var y = fmod(seed * 57.0 + _time * 350.0, viewport_size.y + 120.0) - 60.0
+		var len = 12.0 + fmod(seed * 23.0, 16.0) + _storm_level * 12.0
+		draw_line(
+			Vector2(x, y),
+			Vector2(x - 4.0 - _storm_level * 6.0, y + len),
+			Color(0.85, 0.95, 1.0, 0.06 + _storm_level * 0.17),
+			1.2
+		)
+
+
+func _draw_vignette() -> void:
+	var edge = 110.0
+	var alpha = 0.11 + _storm_level * 0.16
+	draw_rect(Rect2(0.0, 0.0, viewport_size.x, edge), Color(0.03, 0.04, 0.06, alpha))
+	draw_rect(Rect2(0.0, viewport_size.y - edge, viewport_size.x, edge), Color(0.03, 0.04, 0.06, alpha * 1.1))
+	draw_rect(Rect2(0.0, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))
+	draw_rect(Rect2(viewport_size.x - edge, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))

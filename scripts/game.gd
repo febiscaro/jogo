@@ -215,7 +215,7 @@ func _setup_ui() -> void:
 	help_label.offset_bottom = 698.0
 	help_label.add_theme_font_size_override("font_size", 12)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "WASD mover | 1-4 troca cor"
+	help_label.text = "A/D anda | W/S sobe o rolo | 1-4 cor"
 	_style_label(title_label, Color(0.95, 0.98, 1.0, 1.0), 2, Color(0.08, 0.11, 0.17, 0.9))
 	_style_label(coverage_title, Color(0.77, 0.88, 0.99, 1.0))
 	_style_label(time_title, Color(0.77, 0.88, 0.99, 1.0))
@@ -632,7 +632,7 @@ func _start_contract() -> void:
 	_hide_choice_panel()
 	center_message.visible = true
 	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
-	center_message.text = "Pinte todo o muro. Teclas 1-4 ou clique para trocar cor."
+	center_message.text = "A/D anda no chao, W/S sobe o rolo. Teclas 1-4 trocam cor."
 	_update_sidebar_meta()
 	queue_redraw()
 

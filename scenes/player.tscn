@@ -24,6 +24,26 @@ position = Vector2(0, -6)
 color = Color(0.96, 0.58, 0.2, 1)
 polygon = PackedVector2Array(-8, -14, 8, -14, 9, 10, -9, 10)
 
+[node name="VestStripeLeft" type="Polygon2D" parent="."]
+position = Vector2(-4, -6)
+color = Color(0.98, 0.92, 0.58, 0.94)
+polygon = PackedVector2Array(-1, -13, 1, -13, 2, 9, -2, 9)
+
+[node name="VestStripeRight" type="Polygon2D" parent="."]
+position = Vector2(4, -6)
+color = Color(0.98, 0.92, 0.58, 0.94)
+polygon = PackedVector2Array(-1, -13, 1, -13, 2, 9, -2, 9)
+
+[node name="Belt" type="Polygon2D" parent="."]
+position = Vector2(0, 4)
+color = Color(0.15, 0.17, 0.21, 1)
+polygon = PackedVector2Array(-12, -2, 12, -2, 12, 2, -12, 2)
+
+[node name="BeltBuckle" type="Polygon2D" parent="."]
+position = Vector2(0, 4)
+color = Color(0.89, 0.78, 0.45, 1)
+polygon = PackedVector2Array(-2, -2, 2, -2, 2, 2, -2, 2)
+
 [node name="Head" type="Polygon2D" parent="."]
 position = Vector2(0, -40)
 color = Color(0.97, 0.82, 0.65, 1)
@@ -33,6 +53,16 @@ polygon = PackedVector2Array(0, -10, 7, -8, 10, -2, 10, 4, 6, 9, 0, 11, -6, 9, -
 position = Vector2(0, -47)
 color = Color(0.13, 0.2, 0.33, 1)
 polygon = PackedVector2Array(-10, 2, 10, 2, 7, -6, -7, -6)
+
+[node name="HelmetStripe" type="Polygon2D" parent="."]
+position = Vector2(0, -47)
+color = Color(0.94, 0.62, 0.26, 1)
+polygon = PackedVector2Array(-2, 2, 2, 2, 1, -6, -1, -6)
+
+[node name="HelmetShine" type="Polygon2D" parent="."]
+position = Vector2(-3, -49)
+color = Color(1, 1, 1, 0.35)
+polygon = PackedVector2Array(-3, 1, 2, 1, 1, -3, -2, -3)
 
 [node name="ArmLeft" type="Polygon2D" parent="."]
 position = Vector2(-15, -12)
@@ -49,20 +79,40 @@ position = Vector2(-7, 14)
 color = Color(0.14, 0.18, 0.24, 1)
 polygon = PackedVector2Array(-4, 0, 4, 0, 4, 16, -4, 16)
 
+[node name="KneePadLeft" type="Polygon2D" parent="."]
+position = Vector2(-7, 22)
+color = Color(0.23, 0.27, 0.35, 1)
+polygon = PackedVector2Array(-5, -2, 5, -2, 5, 2, -5, 2)
+
 [node name="LegRight" type="Polygon2D" parent="."]
 position = Vector2(7, 14)
 color = Color(0.14, 0.18, 0.24, 1)
 polygon = PackedVector2Array(-4, 0, 4, 0, 4, 16, -4, 16)
+
+[node name="KneePadRight" type="Polygon2D" parent="."]
+position = Vector2(7, 22)
+color = Color(0.23, 0.27, 0.35, 1)
+polygon = PackedVector2Array(-5, -2, 5, -2, 5, 2, -5, 2)
 
 [node name="BootLeft" type="Polygon2D" parent="."]
 position = Vector2(-7, 30)
 color = Color(0.08, 0.1, 0.14, 1)
 polygon = PackedVector2Array(-6, 0, 6, 0, 8, 4, -8, 4)
 
+[node name="BootShineLeft" type="Polygon2D" parent="."]
+position = Vector2(-7, 31)
+color = Color(1, 1, 1, 0.18)
+polygon = PackedVector2Array(-2, 0, 3, 0, 2, 2, -3, 2)
+
 [node name="BootRight" type="Polygon2D" parent="."]
 position = Vector2(7, 30)
 color = Color(0.08, 0.1, 0.14, 1)
 polygon = PackedVector2Array(-6, 0, 6, 0, 8, 4, -8, 4)
+
+[node name="BootShineRight" type="Polygon2D" parent="."]
+position = Vector2(7, 31)
+color = Color(1, 1, 1, 0.18)
+polygon = PackedVector2Array(-2, 0, 3, 0, 2, 2, -3, 2)
 
 [node name="RollerArm" type="Polygon2D" parent="."]
 position = Vector2(9, -11)
@@ -78,6 +128,11 @@ polygon = PackedVector2Array(-2, 24, 2, 24, 2, -4, -2, -4)
 position = Vector2(0, -6)
 color = Color(0.35, 0.66, 0.95, 1)
 polygon = PackedVector2Array(-20, 0, 20, 0, 20, -12, -20, -12)
+
+[node name="FoamHighlight" type="Polygon2D" parent="Roller"]
+position = Vector2(0, -10)
+color = Color(1, 1, 1, 0.22)
+polygon = PackedVector2Array(-18, 0, 18, 0, 14, -2, -14, -2)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_a7yob")
