@@ -46,6 +46,14 @@ var streak_value: Label
 var paint_value: Label
 var risk_value: Label
 var event_value: Label
+var coverage_bar_bg: ColorRect
+var coverage_bar_fill: ColorRect
+var time_bar_bg: ColorRect
+var time_bar_fill: ColorRect
+var roller_bar_bg: ColorRect
+var roller_bar_fill: ColorRect
+var bucket_bar_bg: ColorRect
+var bucket_bar_fill: ColorRect
 
 var choice_panel: Panel
 var choice_title: Label
@@ -54,6 +62,7 @@ var choice_hint: Label
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _state: int = STATE_CONTRACT_SELECT
+var _is_paused: bool = false
 
 var _contract_templates: Array[Dictionary] = []
 var _upgrade_catalog: Array[Dictionary] = []
@@ -85,10 +94,13 @@ var _reputation: float = 1.0
 var _meta_best_streak: int = 0
 var _meta_total_runs: int = 0
 var _meta_total_credits: int = 0
+var _base_scene_position: Vector2 = Vector2.ZERO
+var _camera_shake_strength: float = 0.0
 
 
 func _ready() -> void:
 	_rng.randomize()
+	_base_scene_position = position
 	_setup_ui()
 	_capture_palette()
 
@@ -107,22 +119,26 @@ func _process(delta: float) -> void:
 	_hud_time += delta
 	_update_splashes(delta)
 	_update_environment_weather()
-	if _state == STATE_IN_CONTRACT:
+	if _is_paused:
+		top_status.modulate = Color(1.0, 0.93, 0.62, 1.0)
+	elif _state == STATE_IN_CONTRACT:
 		var pulse = 0.5 + sin(_hud_time * 2.8) * 0.5
 		top_status.modulate = Color(0.82 + pulse * 0.14, 0.90 + pulse * 0.08, 1.0, 1.0)
 	elif _state != STATE_RUN_OVER:
 		top_status.modulate = Color(0.95, 0.99, 1.0, 1.0)
 
-	if _state == STATE_IN_CONTRACT:
+	if _state == STATE_IN_CONTRACT and not _is_paused:
 		_process_contract(delta)
 	elif _state == STATE_RUN_OVER:
 		queue_redraw()
 	elif not _splashes.is_empty():
 		queue_redraw()
 
+	_update_camera_effects(delta)
+
 
 func _input(event: InputEvent) -> void:
-	if _state != STATE_IN_CONTRACT:
+	if _state != STATE_IN_CONTRACT or _is_paused:
 		return
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
@@ -134,6 +150,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event = event as InputEventKey
 		if not key_event.pressed or key_event.echo:
+			return
+
+		if _state == STATE_IN_CONTRACT and key_event.keycode == KEY_ESCAPE:
+			if _is_paused:
+				_resume_contract()
+			else:
+				_pause_contract()
+			return
+
+		if _is_paused:
+			if key_event.keycode == KEY_R:
+				_is_paused = false
+				_start_new_run()
 			return
 
 		if _state == STATE_IN_CONTRACT:
@@ -184,6 +213,19 @@ func _draw() -> void:
 			maxf(1.5, radius * 0.32)
 		)
 
+	if _state == STATE_IN_CONTRACT and wall.has_method("get_lowest_cell_world_pos"):
+		var weak_world: Vector2 = wall.call("get_lowest_cell_world_pos")
+		var weak_local = to_local(weak_world)
+		var pulse = 0.5 + sin(_hud_time * 5.2) * 0.5
+		var ring_color = Color(1.0, 0.82, 0.35, 0.24 + pulse * 0.28)
+		draw_circle(weak_local, 9.0 + pulse * 5.0, ring_color)
+		draw_line(
+			weak_local + Vector2(0.0, -18.0),
+			weak_local + Vector2(0.0, -34.0),
+			Color(1.0, 0.92, 0.58, 0.42 + pulse * 0.4),
+			2.2
+		)
+
 
 func _setup_ui() -> void:
 	title_label.text = "Painel"
@@ -226,18 +268,27 @@ func _setup_ui() -> void:
 
 	help_label.layout_mode = 0
 	help_label.offset_left = stat_left
-	help_label.offset_top = 672.0
+	help_label.offset_top = 674.0
 	help_label.offset_right = stat_right
 	help_label.offset_bottom = 700.0
-	help_label.add_theme_font_size_override("font_size", 11)
+	help_label.add_theme_font_size_override("font_size", 10)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "A/D move | W/S rolo\nE recarrega | 1-4 cor"
+	help_label.text = "A/D move | W/S rolo | E recarrega\n1-4 cor | ESC pausa"
 	_style_label(title_label, Color(0.95, 0.98, 1.0, 1.0), 2, Color(0.08, 0.11, 0.17, 0.9))
 	_style_label(coverage_title, Color(0.77, 0.88, 0.99, 1.0))
 	_style_label(time_title, Color(0.77, 0.88, 0.99, 1.0))
 	_style_label(help_label, Color(0.88, 0.92, 0.98, 0.94))
 	_style_label(coverage_value, Color(0.95, 0.99, 1.0, 1.0), 2, Color(0.09, 0.12, 0.18, 0.95))
 	_style_label(time_value, Color(0.95, 0.99, 1.0, 1.0), 2, Color(0.09, 0.12, 0.18, 0.95))
+
+	coverage_bar_bg = _ensure_stat_bar("CoverageBarBG", stat_left, 332.0, stat_right, 342.0, Color(0.07, 0.10, 0.14, 0.90))
+	coverage_bar_fill = _ensure_stat_bar("CoverageBarFill", stat_left + 1.0, 333.0, stat_left + 1.0, 341.0, Color(0.35, 0.79, 0.97, 1.0))
+	time_bar_bg = _ensure_stat_bar("TimeBarBG", stat_left, 406.0, stat_right, 416.0, Color(0.07, 0.10, 0.14, 0.90))
+	time_bar_fill = _ensure_stat_bar("TimeBarFill", stat_left + 1.0, 407.0, stat_left + 1.0, 415.0, Color(0.73, 0.95, 0.48, 1.0))
+	roller_bar_bg = _ensure_stat_bar("RollerBarBG", stat_left, 466.0, stat_right, 474.0, Color(0.07, 0.10, 0.14, 0.90))
+	roller_bar_fill = _ensure_stat_bar("RollerBarFill", stat_left + 1.0, 467.0, stat_left + 1.0, 473.0, Color(0.32, 0.81, 0.94, 1.0))
+	bucket_bar_bg = _ensure_stat_bar("BucketBarBG", stat_left, 478.0, stat_right, 486.0, Color(0.07, 0.10, 0.14, 0.90))
+	bucket_bar_fill = _ensure_stat_bar("BucketBarFill", stat_left + 1.0, 479.0, stat_left + 1.0, 485.0, Color(0.93, 0.66, 0.29, 1.0))
 
 	for swatch in [swatch_blue, swatch_orange, swatch_green, swatch_purple]:
 		swatch.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -316,6 +367,38 @@ func _ensure_stat_label(node_name: String, left: float, top: float, right: float
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.add_theme_font_size_override("font_size", font_size)
 	return label
+
+
+func _ensure_stat_bar(node_name: String, left: float, top: float, right: float, bottom: float, color: Color) -> ColorRect:
+	var existing = sidebar.get_node_or_null(node_name)
+	var bar: ColorRect
+	if existing and existing is ColorRect:
+		bar = existing as ColorRect
+	else:
+		bar = ColorRect.new()
+		bar.name = node_name
+		sidebar.add_child(bar)
+
+	bar.layout_mode = 0
+	bar.offset_left = left
+	bar.offset_top = top
+	bar.offset_right = right
+	bar.offset_bottom = bottom
+	bar.color = color
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return bar
+
+
+func _update_bar(fill: ColorRect, bg: ColorRect, ratio: float, color: Color) -> void:
+	if fill == null or bg == null:
+		return
+	var safe_ratio = clampf(ratio, 0.0, 1.0)
+	var bar_width = maxf(0.0, (bg.offset_right - bg.offset_left) - 2.0)
+	fill.offset_left = bg.offset_left + 1.0
+	fill.offset_top = bg.offset_top + 1.0
+	fill.offset_bottom = bg.offset_bottom - 1.0
+	fill.offset_right = fill.offset_left + (bar_width * safe_ratio)
+	fill.color = color
 
 
 func _ensure_panel(panel_name: String, left: float, top: float, right: float, bottom: float) -> Panel:
@@ -521,6 +604,7 @@ func _update_environment_weather() -> void:
 
 
 func _start_new_run() -> void:
+	_is_paused = false
 	_run_seed = int(_rng.randi())
 	_run_day = 1
 	_streak = 0
@@ -549,6 +633,7 @@ func _start_new_run() -> void:
 
 
 func _enter_contract_selection(message: String) -> void:
+	_is_paused = false
 	_state = STATE_CONTRACT_SELECT
 	_active_event.clear()
 	_active_event_time = 0.0
@@ -604,6 +689,7 @@ func _pick_contract(index: int) -> void:
 
 
 func _start_contract() -> void:
+	_is_paused = false
 	_state = STATE_IN_CONTRACT
 	_elapsed = 0.0
 	_drop_timer = 0.0
@@ -754,6 +840,8 @@ func _update_drops(delta: float) -> void:
 
 		if wall_rect.has_point(pos):
 			wall.call("damage_at", pos, radius * 2.0, power * damage_scale * delta)
+			if _rng.randf() < minf(1.0, delta * 1.8 * power):
+				_add_camera_shake(minf(2.2, power * 0.85))
 			if _rng.randf() < minf(1.0, delta * 10.0):
 				var drop_color = drop.get("color", Color(0.70, 0.88, 1.0, 0.95))
 				_spawn_splash(pos, drop_color, clampf(power * 0.35, 0.35, 1.2))
@@ -817,6 +905,10 @@ func _activate_event() -> void:
 	var drain_mult = _event_value("player_drain_mult", 1.0)
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", speed_mult, paint_mult, drain_mult)
+	_add_camera_shake(4.6)
+	if environment != null and environment.has_method("trigger_lightning"):
+		var flash_strength = 0.55 + maxf(0.0, _event_value("damage_mult", 1.0) - 1.0)
+		environment.call("trigger_lightning", flash_strength)
 
 	top_status.text = "Evento: %s" % _active_event.get("name", "Clima hostil")
 	center_message.text = _active_event.get("description", "")
@@ -860,6 +952,10 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 	]
 	if bucket != null and bucket.has_method("set_fill_ratio"):
 		bucket.call("set_fill_ratio", bucket_ratio)
+	_update_bar(coverage_bar_fill, coverage_bar_bg, coverage, Color(0.30, 0.79, 0.97, 1.0))
+	_update_bar(time_bar_fill, time_bar_bg, remaining / maxf(1.0, duration), Color(0.73, 0.95, 0.48, 1.0))
+	_update_bar(roller_bar_fill, roller_bar_bg, paint_ratio, Color(0.28, 0.80, 0.94, 1.0))
+	_update_bar(bucket_bar_fill, bucket_bar_bg, bucket_ratio, Color(0.93, 0.67, 0.30, 1.0))
 
 	risk_value.text = _selected_contract.get("risk_label", "-")
 	if _active_event.is_empty():
@@ -867,12 +963,16 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 			center_message.text = "Recarregando no balde..."
 		elif paint_ratio <= 0.08 and bucket_ratio <= 0.01:
 			center_message.text = "Sem tinta no rolo e balde vazio."
+			_add_camera_shake(2.2)
 		elif paint_ratio <= 0.20:
 			center_message.text = "Tanque baixo. Segure E ao lado do balde."
+			if int(floor(_hud_time * 2.0)) % 2 == 0:
+				_add_camera_shake(0.55)
 	_update_sidebar_meta()
 
 
 func _complete_contract(coverage: float, target: float, lowest: float) -> void:
+	_is_paused = false
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
@@ -894,6 +994,7 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_total_contracts_completed += 1
 	_reputation += 0.45 + quality
 	_run_day += 1
+	_add_camera_shake(2.8)
 
 	top_status.text = "Contrato entregue! +C$%d" % payout
 	center_message.visible = false
@@ -902,6 +1003,7 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 
 
 func _fail_run(reason: String, coverage: float, lowest: float) -> void:
+	_is_paused = false
 	_state = STATE_RUN_OVER
 	_clear_active_event()
 	_drops.clear()
@@ -920,6 +1022,7 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 
 	top_status.text = "RUN QUEBRADA"
 	top_status.modulate = Color(1.0, 0.48, 0.44, 1.0)
+	_add_camera_shake(8.0)
 	center_message.visible = false
 	center_message.text = ""
 
@@ -952,6 +1055,7 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 
 
 func _enter_upgrade_selection() -> void:
+	_is_paused = false
 	_upgrades_offered = _roll_upgrade_choices()
 	if _upgrades_offered.is_empty():
 		_enter_contract_selection("Sem upgrades disponiveis. Proximo contrato!")
@@ -1145,12 +1249,58 @@ func _set_wall_drip_intensity(value: float) -> void:
 		wall.call("set_drip_intensity", value)
 
 
+func _pause_contract() -> void:
+	if _state != STATE_IN_CONTRACT or _is_paused:
+		return
+	_is_paused = true
+	if player.has_method("set_game_active"):
+		player.call("set_game_active", false)
+	_show_choice_panel()
+	choice_title.text = "Pausado"
+	choice_body.text = "Respire, revise sua estrategia e volte quando quiser.\n\nDica: pinte por faixas horizontais e recarregue antes do tanque zerar."
+	choice_hint.text = "ESC retoma | R inicia nova run"
+	top_status.text = "PAUSADO"
+	center_message.visible = false
+
+
+func _resume_contract() -> void:
+	if not _is_paused:
+		return
+	_is_paused = false
+	if player.has_method("set_game_active"):
+		player.call("set_game_active", true)
+	_hide_choice_panel()
+	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
+	center_message.visible = true
+	center_message.text = _active_event.get("description", "Continue o retoque.") if not _active_event.is_empty() else "Continue o retoque."
+
+
+func _add_camera_shake(amount: float) -> void:
+	_camera_shake_strength = minf(18.0, _camera_shake_strength + amount)
+
+
+func _update_camera_effects(delta: float) -> void:
+	_camera_shake_strength = maxf(0.0, _camera_shake_strength - delta * (7.4 + _camera_shake_strength * 0.52))
+	if _camera_shake_strength <= 0.01:
+		position = _base_scene_position
+		return
+	var offset = Vector2(
+		_rng.randf_range(-1.0, 1.0),
+		_rng.randf_range(-1.0, 1.0)
+	) * _camera_shake_strength
+	position = _base_scene_position + offset
+
+
 func _update_sidebar_meta() -> void:
 	money_value.text = "C$%d" % _money
 	day_value.text = "%d" % _run_day
 	streak_value.text = "%d" % _streak
 	if _state != STATE_IN_CONTRACT:
 		paint_value.text = "Rolo --\nBalde --"
+		_update_bar(coverage_bar_fill, coverage_bar_bg, 0.0, Color(0.30, 0.79, 0.97, 1.0))
+		_update_bar(time_bar_fill, time_bar_bg, 0.0, Color(0.73, 0.95, 0.48, 1.0))
+		_update_bar(roller_bar_fill, roller_bar_bg, 0.0, Color(0.28, 0.80, 0.94, 1.0))
+		_update_bar(bucket_bar_fill, bucket_bar_bg, 0.0, Color(0.93, 0.67, 0.30, 1.0))
 
 
 func _apply_palette(base_color: Color) -> void:

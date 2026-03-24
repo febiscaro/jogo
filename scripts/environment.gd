@@ -8,10 +8,16 @@ var _time: float = 0.0
 var _storm_level: float = 0.0
 var _storm_target: float = 0.0
 var _clouds: Array[Dictionary] = []
+var _lightning_alpha: float = 0.0
+var _lightning_timer: float = 0.0
+var _next_lightning: float = 0.0
+var _lightning_x: float = 0.0
 
 
 func _ready() -> void:
 	_rng.randomize()
+	_next_lightning = _rng.randf_range(3.8, 7.4)
+	_lightning_x = viewport_size.x * 0.55
 	for i in range(10):
 		_clouds.append(
 			{
@@ -31,9 +37,25 @@ func set_storm_level(value: float) -> void:
 	_storm_target = clampf(value, 0.0, 1.0)
 
 
+func trigger_lightning(intensity: float = 1.0) -> void:
+	var safe_intensity = clampf(intensity, 0.2, 1.8)
+	_lightning_alpha = clampf(0.35 + safe_intensity * 0.32, 0.25, 0.95)
+	_lightning_timer = 0.06 + safe_intensity * 0.04
+	_lightning_x = _rng.randf_range(viewport_size.x * 0.12, viewport_size.x * 0.88)
+	_next_lightning = _rng.randf_range(3.2, 6.8)
+
+
 func _process(delta: float) -> void:
 	_time += delta
 	_storm_level = lerpf(_storm_level, _storm_target, minf(1.0, delta * 1.8))
+	_lightning_timer = maxf(0.0, _lightning_timer - delta)
+	_lightning_alpha = maxf(0.0, _lightning_alpha - delta * 2.4)
+	_next_lightning -= delta
+	if _storm_level > 0.46 and _next_lightning <= 0.0:
+		if _rng.randf() < clampf((_storm_level - 0.35) * 0.65, 0.12, 0.52):
+			trigger_lightning(0.42 + _storm_level * 0.74)
+		else:
+			_next_lightning = _rng.randf_range(2.8, 6.2)
 
 	for i in range(_clouds.size()):
 		var cloud: Dictionary = _clouds[i]
@@ -57,6 +79,7 @@ func _draw() -> void:
 	_draw_ground_details()
 	_draw_wind_lines()
 	_draw_rain_overlay()
+	_draw_lightning_flash()
 	_draw_vignette()
 
 
@@ -216,6 +239,30 @@ func _draw_vignette() -> void:
 	draw_rect(Rect2(0.0, viewport_size.y - edge, viewport_size.x, edge), Color(0.03, 0.04, 0.06, alpha * 1.1))
 	draw_rect(Rect2(0.0, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))
 	draw_rect(Rect2(viewport_size.x - edge, 0.0, edge, viewport_size.y), Color(0.03, 0.04, 0.06, alpha * 0.8))
+
+
+func _draw_lightning_flash() -> void:
+	if _lightning_alpha <= 0.01:
+		return
+
+	var overlay_alpha = _lightning_alpha * (0.20 + _storm_level * 0.22)
+	draw_rect(Rect2(0.0, 0.0, viewport_size.x, ground_y + 90.0), Color(0.90, 0.96, 1.0, overlay_alpha))
+
+	var x = _lightning_x
+	var y = 14.0
+	var bolt_alpha = clampf(_lightning_alpha * 1.25, 0.16, 1.0)
+	for i in range(8):
+		var nx = x + sin((_time * 32.0) + float(i) * 1.7) * 14.0 + _rng.randf_range(-8.0, 8.0)
+		var ny = y + 26.0 + float(i) * 10.0
+		draw_line(Vector2(x, y), Vector2(nx, ny), Color(0.95, 0.99, 1.0, bolt_alpha), 2.4)
+		draw_line(Vector2(x, y), Vector2(nx, ny), Color(0.66, 0.84, 1.0, bolt_alpha * 0.45), 5.4)
+		x = nx
+		y = ny
+		if y > ground_y - 22.0:
+			break
+
+	if _lightning_timer > 0.0:
+		draw_circle(Vector2(_lightning_x, 38.0), 26.0, Color(0.92, 0.98, 1.0, _lightning_alpha * 0.36))
 
 
 func _draw_soft_ellipse(center: Vector2, radii: Vector2, color: Color, points: int = 24) -> void:

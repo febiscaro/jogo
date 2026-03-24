@@ -19,6 +19,7 @@ var _rows: int = 0
 var _coverage: PackedFloat32Array = PackedFloat32Array()
 var _avg_coverage: float = 0.0
 var _lowest_coverage: float = 0.0
+var _lowest_index: int = 0
 var _anim_time: float = 0.0
 var _drip_intensity: float = 0.0
 var _damage_heat: float = 0.0
@@ -89,6 +90,15 @@ func get_lowest_coverage() -> float:
 	return _lowest_coverage
 
 
+func get_lowest_cell_world_pos() -> Vector2:
+	if _columns <= 0 or _rows <= 0:
+		return global_position + wall_size * 0.5
+	var row = int(floor(float(_lowest_index) / float(_columns)))
+	var col = _lowest_index % _columns
+	var local = Vector2((float(col) + 0.5) * cell_size, (float(row) + 0.5) * cell_size)
+	return to_global(local)
+
+
 func get_cell_count_below(threshold: float) -> int:
 	var count = 0
 	for value in _coverage:
@@ -135,13 +145,17 @@ func _recalculate_cache() -> void:
 
 	var total = 0.0
 	var lowest = 1.0
-	for amount in _coverage:
+	var lowest_index = 0
+	for i in range(_coverage.size()):
+		var amount = _coverage[i]
 		total += amount
 		if amount < lowest:
 			lowest = amount
+			lowest_index = i
 
 	_avg_coverage = total / float(_coverage.size())
 	_lowest_coverage = lowest
+	_lowest_index = lowest_index
 
 
 func _affect_cells(world_position: Vector2, radius: float, delta_strength: float) -> bool:
@@ -205,6 +219,7 @@ func _draw() -> void:
 				var streak_len = 6.0 + (1.0 - coverage) * 14.0
 				draw_line(streak_top, streak_top + Vector2(0.0, streak_len), Color(grime_color.r, grime_color.g, grime_color.b, 0.28), 1.0)
 
+	_draw_weakest_marker()
 	_draw_shine()
 	_draw_frame_details()
 
@@ -284,6 +299,22 @@ func _simulate_runoff(delta: float) -> void:
 	if changed:
 		_coverage = next_coverage
 		_recalculate_cache()
+
+
+func _draw_weakest_marker() -> void:
+	if _coverage.is_empty():
+		return
+	if _lowest_coverage >= 0.96:
+		return
+
+	var row = int(floor(float(_lowest_index) / float(_columns)))
+	var col = _lowest_index % _columns
+	var center = Vector2((float(col) + 0.5) * cell_size, (float(row) + 0.5) * cell_size)
+	var pulse = 0.5 + sin(_anim_time * 5.6) * 0.5
+	var radius = cell_size * 0.32 + pulse * 3.0
+	var alpha = clampf((0.94 - _lowest_coverage) * 0.9, 0.12, 0.62)
+	draw_arc(center, radius, 0.0, TAU, 22, Color(1.0, 0.86, 0.36, alpha), 1.8, true)
+	draw_circle(center, 1.9, Color(1.0, 0.93, 0.58, alpha * 0.9))
 
 
 func _draw_wall_base() -> void:
