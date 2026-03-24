@@ -10,6 +10,13 @@ extends CharacterBody2D
 
 @onready var roller: Node2D = $Roller
 @onready var foam: Polygon2D = $Roller/Foam
+@onready var torso: Node2D = get_node_or_null("Torso") as Node2D
+@onready var head: Node2D = get_node_or_null("Head") as Node2D
+@onready var arm_left: Node2D = get_node_or_null("ArmLeft") as Node2D
+@onready var arm_right: Node2D = get_node_or_null("ArmRight") as Node2D
+@onready var leg_left: Node2D = get_node_or_null("LegLeft") as Node2D
+@onready var leg_right: Node2D = get_node_or_null("LegRight") as Node2D
+@onready var roller_arm: Node2D = get_node_or_null("RollerArm") as Node2D
 
 var _wall: Node = null
 var _is_active: bool = true
@@ -26,10 +33,15 @@ var _paint_regen: float = base_paint_regen_per_second
 var _paint_drain: float = base_paint_drain_per_second
 var _paint_amount: float = base_paint_capacity
 var _active_paint_color: Color = Color(0.35, 0.66, 0.95, 1.0)
+var _anim_time: float = 0.0
+var _rest_positions: Dictionary = {}
 
 
 func _ready() -> void:
 	_paint_amount = _paint_capacity
+	for part in [torso, head, arm_left, arm_right, leg_left, leg_right, roller_arm]:
+		if part != null:
+			_rest_positions[part.name] = part.position
 
 
 func set_wall(wall: Node) -> void:
@@ -90,6 +102,10 @@ func is_painting() -> bool:
 	return _is_painting
 
 
+func get_roller_position() -> Vector2:
+	return roller.global_position
+
+
 func get_stat_snapshot() -> Dictionary:
 	return {
 		"speed": _speed,
@@ -127,6 +143,7 @@ func _physics_process(delta: float) -> void:
 
 	if direction.length() > 0.1:
 		roller.rotation = direction.angle() + PI * 0.5
+	_animate_body(direction, delta)
 
 	var did_paint = false
 	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0:
@@ -141,3 +158,41 @@ func _physics_process(delta: float) -> void:
 
 	_is_painting = did_paint
 	foam.modulate = _active_paint_color if _paint_amount > 5.0 else Color(0.45, 0.45, 0.45, 1.0)
+
+
+func _animate_body(direction: Vector2, delta: float) -> void:
+	var movement = clampf(direction.length(), 0.0, 1.0)
+	_anim_time += delta * (3.2 + movement * 7.4)
+	var bob = sin(_anim_time * 4.8) * 2.1 * movement
+	var sway = sin(_anim_time * 3.3) * 1.6 * movement
+
+	if torso != null:
+		torso.position = _rest_position("Torso", torso.position) + Vector2(0.0, bob)
+	if head != null:
+		head.position = _rest_position("Head", head.position) + Vector2(0.0, bob * 0.4)
+
+	var arm_swing = sin(_anim_time * 6.4) * 0.25 * movement
+	if arm_left != null:
+		arm_left.position = _rest_position("ArmLeft", arm_left.position) + Vector2(-sway * 0.2, bob * 0.45)
+		arm_left.rotation = -arm_swing
+	if arm_right != null:
+		arm_right.position = _rest_position("ArmRight", arm_right.position) + Vector2(sway * 0.2, bob * 0.35)
+		arm_right.rotation = arm_swing * 1.2
+	if roller_arm != null:
+		roller_arm.position = _rest_position("RollerArm", roller_arm.position) + Vector2(sway * 0.3, bob * 0.3)
+		roller_arm.rotation = arm_swing * 0.9
+
+	var leg_swing = sin(_anim_time * 6.4 + PI * 0.5) * 1.6 * movement
+	if leg_left != null:
+		leg_left.position = _rest_position("LegLeft", leg_left.position) + Vector2(0.0, absf(leg_swing) * 0.25)
+		leg_left.rotation = deg_to_rad(-4.0) * movement
+	if leg_right != null:
+		leg_right.position = _rest_position("LegRight", leg_right.position) + Vector2(0.0, absf(-leg_swing) * 0.25)
+		leg_right.rotation = deg_to_rad(4.0) * movement
+
+
+func _rest_position(name: String, fallback: Vector2) -> Vector2:
+	var value = _rest_positions.get(name, fallback)
+	if value is Vector2:
+		return value
+	return fallback

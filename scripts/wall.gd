@@ -5,6 +5,8 @@ extends Node2D
 @export var base_color: Color = Color(0.81, 0.78, 0.72, 1.0)
 @export var paint_color: Color = Color(0.31, 0.62, 0.90, 1.0)
 @export var frame_color: Color = Color(0.21, 0.18, 0.15, 1.0)
+@export var mortar_color: Color = Color(0.66, 0.63, 0.57, 0.18)
+@export var grime_color: Color = Color(0.18, 0.21, 0.24, 0.15)
 @export var initial_min_coverage: float = 0.55
 @export var initial_max_coverage: float = 0.78
 
@@ -13,12 +15,18 @@ var _rows: int = 0
 var _coverage: PackedFloat32Array = PackedFloat32Array()
 var _avg_coverage: float = 0.0
 var _lowest_coverage: float = 0.0
+var _anim_time: float = 0.0
 
 
 func _ready() -> void:
 	randomize()
 	_setup_grid()
 	reset_coverage(initial_min_coverage, initial_max_coverage)
+
+
+func _process(delta: float) -> void:
+	_anim_time += delta
+	queue_redraw()
 
 
 func configure(config: Dictionary) -> void:
@@ -157,16 +165,92 @@ func _affect_cells(world_position: Vector2, radius: float, delta_strength: float
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, wall_size), base_color)
+	_draw_wall_base()
 
 	for row in range(_rows):
 		for col in range(_columns):
 			var index = row * _columns + col
-			var tint = base_color.lerp(paint_color, _coverage[index])
+			var coverage = _coverage[index]
+			var tint = base_color.lerp(paint_color, coverage)
+			var noise = _get_cell_noise(col, row)
+			tint = tint.lightened(noise * 0.22)
+			tint = tint.darkened((1.0 - coverage) * 0.08)
+
 			var cell_rect = Rect2(
 				Vector2(col * cell_size, row * cell_size),
 				Vector2(cell_size + 0.7, cell_size + 0.7)
 			)
 			draw_rect(cell_rect, tint)
+			draw_rect(cell_rect, mortar_color, false, 1.0)
 
+			if coverage < 0.28 and (col + row) % 2 == 0:
+				_draw_cell_cracks(cell_rect, coverage)
+			if coverage < 0.44 and (col * 7 + row * 5) % 9 == 0:
+				var streak_top = cell_rect.position + Vector2(cell_rect.size.x * 0.5, cell_rect.size.y * 0.35)
+				var streak_len = 6.0 + (1.0 - coverage) * 14.0
+				draw_line(streak_top, streak_top + Vector2(0.0, streak_len), Color(grime_color.r, grime_color.g, grime_color.b, 0.28), 1.0)
+
+	_draw_shine()
+	_draw_frame_details()
+
+
+func _draw_wall_base() -> void:
+	var top = base_color.lightened(0.12)
+	var bottom = base_color.darkened(0.14)
+	var poly = PackedVector2Array(
+		[
+			Vector2.ZERO,
+			Vector2(wall_size.x, 0.0),
+			Vector2(wall_size.x, wall_size.y),
+			Vector2(0.0, wall_size.y),
+		]
+	)
+	draw_polygon(poly, PackedColorArray([top, top, bottom, bottom]))
+
+
+func _draw_shine() -> void:
+	var wetness = clampf(_avg_coverage, 0.0, 1.0)
+	var band_x = fmod(_anim_time * 65.0, wall_size.x + 240.0) - 120.0
+	var shine_alpha = 0.06 + wetness * 0.14
+	var p1 = Vector2(band_x - 40.0, 0.0)
+	var p2 = Vector2(band_x + 10.0, 0.0)
+	var p3 = Vector2(band_x + 90.0, wall_size.y)
+	var p4 = Vector2(band_x + 40.0, wall_size.y)
+	draw_polygon(
+		PackedVector2Array([p1, p2, p3, p4]),
+		PackedColorArray(
+			[
+				Color(0.95, 0.98, 1.0, 0.0),
+				Color(0.95, 0.98, 1.0, shine_alpha),
+				Color(0.95, 0.98, 1.0, 0.0),
+				Color(0.95, 0.98, 1.0, 0.0),
+			]
+		)
+	)
+
+
+func _draw_cell_cracks(cell_rect: Rect2, coverage: float) -> void:
+	var crack_alpha = clampf((0.34 - coverage) * 1.8, 0.06, 0.42)
+	var crack_color = Color(0.16, 0.16, 0.18, crack_alpha)
+	var center = cell_rect.position + cell_rect.size * 0.5
+	var amp = (1.0 - coverage) * 3.5
+	draw_line(center + Vector2(-4.0, -2.0), center + Vector2(5.0 + amp, 2.0), crack_color, 1.0)
+	draw_line(center + Vector2(-1.0, 0.0), center + Vector2(-5.0, 5.0 + amp), crack_color, 1.0)
+
+
+func _draw_frame_details() -> void:
+	draw_rect(Rect2(Vector2(-8.0, -8.0), wall_size + Vector2(16.0, 16.0)), Color(0.02, 0.03, 0.06, 0.22), false, 8.0)
 	draw_rect(Rect2(Vector2.ZERO, wall_size), frame_color, false, 6.0)
+	draw_rect(Rect2(Vector2(3.0, 3.0), wall_size - Vector2(6.0, 6.0)), Color(0.93, 0.95, 1.0, 0.07), false, 2.0)
+
+	for i in range(6):
+		var t = float(i) / 5.0
+		var x = lerpf(16.0, wall_size.x - 16.0, t)
+		draw_circle(Vector2(x, 7.0), 2.2, Color(0.62, 0.64, 0.68, 0.65))
+		draw_circle(Vector2(x, wall_size.y - 7.0), 2.2, Color(0.62, 0.64, 0.68, 0.65))
+
+
+func _get_cell_noise(col: int, row: int) -> float:
+	var base = sin(float(col) * 1.71 + float(row) * 2.23)
+	var wave = sin(_anim_time * 0.7 + float(col) * 0.32 + float(row) * 0.21)
+	return clampf((base * 0.55 + wave * 0.45) * 0.5, -1.0, 1.0)
