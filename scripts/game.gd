@@ -96,6 +96,7 @@ var _meta_total_runs: int = 0
 var _meta_total_credits: int = 0
 var _base_scene_position: Vector2 = Vector2.ZERO
 var _camera_shake_strength: float = 0.0
+var _camera_shake_phase: float = 0.0
 var _contract_target_color: Color = Color(0.31, 0.62, 0.90, 1.0)
 var _color_match_ratio: float = 1.0
 var _contract_pattern_mode: String = "solid"
@@ -710,6 +711,9 @@ func _update_environment_weather() -> void:
 
 func _start_new_run() -> void:
 	_is_paused = false
+	_camera_shake_strength = 0.0
+	_camera_shake_phase = 0.0
+	position = _base_scene_position
 	_run_seed = int(_rng.randi())
 	_run_day = 1
 	_streak = 0
@@ -943,6 +947,7 @@ func _update_drops(delta: float) -> void:
 
 	var melt_resist = clampf(float(_run_modifiers.get("melt_resist", 0.0)), 0.0, 0.82)
 	var damage_scale = maxf(0.04, event_damage_mult * (1.0 - melt_resist) * 0.22)
+	var rain_shake_impulse = 0.0
 
 	for i in range(_drops.size() - 1, -1, -1):
 		var drop: Dictionary = _drops[i]
@@ -958,8 +963,8 @@ func _update_drops(delta: float) -> void:
 
 		if wall_rect.has_point(pos):
 			wall.call("damage_at", pos, radius * 2.0, power * damage_scale * delta)
-			if _rng.randf() < minf(1.0, delta * 1.8 * power):
-				_add_camera_shake(minf(2.2, power * 0.85))
+			if _rng.randf() < minf(1.0, delta * (0.8 + power * 0.25)):
+				rain_shake_impulse += 0.0045 * power
 			if _rng.randf() < minf(1.0, delta * 10.0):
 				var drop_color = drop.get("color", Color(0.70, 0.88, 1.0, 0.95))
 				_spawn_splash(pos, drop_color, clampf(power * 0.35, 0.35, 1.2))
@@ -968,6 +973,9 @@ func _update_drops(delta: float) -> void:
 			_drops.remove_at(i)
 		else:
 			_drops[i] = drop
+
+	if rain_shake_impulse > 0.0:
+		_add_camera_shake(minf(0.045, rain_shake_impulse))
 
 
 func _spawn_drop(wall_rect: Rect2, pressure: float, speed_mult: float, radius_mult: float, wind_force: float) -> void:
@@ -1023,7 +1031,7 @@ func _activate_event() -> void:
 	var drain_mult = _event_value("player_drain_mult", 1.0)
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", speed_mult, paint_mult, drain_mult)
-	_add_camera_shake(4.6)
+	_add_camera_shake(0.18)
 	if environment != null and environment.has_method("trigger_lightning"):
 		var flash_strength = 0.55 + maxf(0.0, _event_value("damage_mult", 1.0) - 1.0)
 		environment.call("trigger_lightning", flash_strength)
@@ -1086,11 +1094,11 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 			center_message.text = "Recarregando no balde..."
 		elif paint_ratio <= 0.08 and bucket_ratio <= 0.01:
 			center_message.text = "Sem tinta no rolo e balde vazio."
-			_add_camera_shake(2.2)
+			_add_camera_shake(0.05)
 		elif paint_ratio <= 0.20:
 			center_message.text = "Tanque baixo. Segure E ao lado do balde."
 			if int(floor(_hud_time * 2.0)) % 2 == 0:
-				_add_camera_shake(0.55)
+				_add_camera_shake(0.015)
 	_update_sidebar_meta()
 
 
@@ -1117,7 +1125,7 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_total_contracts_completed += 1
 	_reputation += 0.45 + quality
 	_run_day += 1
-	_add_camera_shake(2.8)
+	_add_camera_shake(0.10)
 
 	top_status.text = "Contrato entregue! +C$%d" % payout
 	center_message.visible = false
@@ -1145,7 +1153,7 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 
 	top_status.text = "RUN QUEBRADA"
 	top_status.modulate = Color(1.0, 0.48, 0.44, 1.0)
-	_add_camera_shake(8.0)
+	_add_camera_shake(0.28)
 	center_message.visible = false
 	center_message.text = ""
 
@@ -1438,19 +1446,22 @@ func _resume_contract() -> void:
 
 
 func _add_camera_shake(amount: float) -> void:
-	_camera_shake_strength = minf(18.0, _camera_shake_strength + amount)
+	_camera_shake_strength = clampf(_camera_shake_strength + amount, 0.0, 1.0)
 
 
 func _update_camera_effects(delta: float) -> void:
-	_camera_shake_strength = maxf(0.0, _camera_shake_strength - delta * (7.4 + _camera_shake_strength * 0.52))
-	if _camera_shake_strength <= 0.01:
+	_camera_shake_strength = maxf(0.0, _camera_shake_strength - delta * 1.18)
+	if _camera_shake_strength <= 0.0001:
 		position = _base_scene_position
 		return
-	var offset = Vector2(
-		_rng.randf_range(-1.0, 1.0),
-		_rng.randf_range(-1.0, 1.0)
-	) * _camera_shake_strength
-	position = _base_scene_position + offset
+	_camera_shake_phase += delta * (24.0 + _camera_shake_strength * 16.0)
+	var amplitude = 6.0 * _camera_shake_strength * _camera_shake_strength
+	var sx = sin(_camera_shake_phase * 1.9) + sin(_camera_shake_phase * 2.7 + 1.1)
+	var sy = cos(_camera_shake_phase * 1.7) + sin(_camera_shake_phase * 2.4 + 0.6)
+	var dir = Vector2(sx, sy)
+	if dir.length_squared() > 0.0001:
+		dir = dir.normalized()
+	position = _base_scene_position + (dir * amplitude)
 
 
 func _update_sidebar_meta() -> void:
