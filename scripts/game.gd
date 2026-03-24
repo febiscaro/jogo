@@ -7,6 +7,7 @@ const STATE_RUN_OVER = 3
 
 const SAVE_PATH = "user://meta_progress.json"
 const FOCUS_ZONE_BASE_RADIUS = 36.0
+const POSTFX_GRAIN_SAMPLES = 96
 
 const MULTIPLIER_KEYS = [
 	"speed_mult",
@@ -83,6 +84,7 @@ var _event_timer: float = 0.0
 var _active_event_time: float = 0.0
 var _hud_time: float = 0.0
 var _splashes: Array[Dictionary] = []
+var _impact_marks: Array[Dictionary] = []
 
 var _run_seed: int = 0
 var _run_day: int = 1
@@ -135,6 +137,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_hud_time += delta
 	_update_splashes(delta)
+	_update_impact_marks(delta)
 	_update_environment_weather()
 	if _is_paused:
 		top_status.modulate = Color(1.0, 0.93, 0.62, 1.0)
@@ -148,7 +151,7 @@ func _process(delta: float) -> void:
 		_process_contract(delta)
 	elif _state == STATE_RUN_OVER:
 		queue_redraw()
-	elif not _splashes.is_empty():
+	elif not _splashes.is_empty() or not _impact_marks.is_empty():
 		queue_redraw()
 
 	_update_camera_effects(delta)
@@ -217,6 +220,25 @@ func _draw() -> void:
 		draw_circle(pos, size, splash_color)
 		draw_line(pos, pos - velocity * 0.06, Color(base_color.r, base_color.g, base_color.b, 0.22 * fade), maxf(1.0, size * 0.25))
 
+	for mark in _impact_marks:
+		var pos = mark.get("pos", Vector2.ZERO)
+		var life = float(mark.get("life", 0.0))
+		var max_life = maxf(0.01, float(mark.get("max_life", 1.0)))
+		var fade = clampf(life / max_life, 0.0, 1.0)
+		var color = mark.get("color", Color(0.76, 0.90, 1.0, 0.85))
+		var radius = float(mark.get("radius", 4.2))
+		var streak = float(mark.get("streak_len", 18.0))
+		var width = float(mark.get("width", 1.8))
+		var glow = Color(color.r, color.g, color.b, (0.18 + fade * 0.24) * color.a)
+		draw_circle(pos, radius * (0.74 + fade * 0.26), glow)
+		draw_line(
+			pos + Vector2(0.0, radius * 0.36),
+			pos + Vector2(float(mark.get("drift", 0.0)) * 0.16, radius * 0.36 + streak * (1.0 - fade * 0.22)),
+			Color(color.r, color.g, color.b, color.a * (0.24 + fade * 0.38)),
+			width
+		)
+		draw_circle(pos + Vector2(0.0, radius * 0.28), radius * 0.33, Color(1.0, 1.0, 1.0, 0.22 * fade))
+
 	for drop in _drops:
 		var pos = drop.get("pos", Vector2.ZERO)
 		var radius = float(drop.get("radius", 6.0))
@@ -260,6 +282,65 @@ func _draw() -> void:
 			3.0
 		)
 		draw_circle(focus_local, 6.2 + pulse * 1.4, Color(1.0, 0.92, 0.72, 0.88))
+
+	_draw_post_fx()
+
+
+func _draw_post_fx() -> void:
+	if _state != STATE_IN_CONTRACT and _state != STATE_RUN_OVER:
+		return
+	var viewport_size = get_viewport_rect().size
+	if viewport_size.x <= 1.0 or viewport_size.y <= 1.0:
+		return
+
+	var stress = clampf(_camera_shake_strength * 0.6 + float(_drops.size()) / 220.0, 0.0, 1.0)
+	var storm = clampf(_event_value("damage_mult", 1.0) - 1.0, 0.0, 1.4) if _state == STATE_IN_CONTRACT else 0.0
+	var intensity = clampf(0.18 + stress * 0.5 + storm * 0.35, 0.12, 1.0)
+
+	_draw_postfx_bloom(viewport_size, intensity)
+	_draw_postfx_chromatic_edges(viewport_size, intensity)
+	_draw_postfx_grain(viewport_size, intensity)
+
+
+func _draw_postfx_bloom(viewport_size: Vector2, intensity: float) -> void:
+	var center = viewport_size * 0.5
+	var pulse = 0.5 + sin(_hud_time * 1.7) * 0.5
+	var base_radius = viewport_size.y * (0.26 + intensity * 0.16)
+	for i in range(3):
+		var t = float(i) / 2.0
+		var radius = base_radius * (1.0 + t * 0.58 + pulse * 0.06)
+		var alpha = (0.055 - t * 0.014) * (0.7 + intensity * 0.8)
+		draw_circle(center, radius, Color(0.86, 0.90, 0.98, alpha))
+
+
+func _draw_postfx_chromatic_edges(viewport_size: Vector2, intensity: float) -> void:
+	var edge = 54.0 + intensity * 40.0
+	var left = Rect2(0.0, 0.0, edge, viewport_size.y)
+	var right = Rect2(viewport_size.x - edge, 0.0, edge, viewport_size.y)
+	var top = Rect2(0.0, 0.0, viewport_size.x, edge * 0.7)
+	var bottom = Rect2(0.0, viewport_size.y - edge * 0.7, viewport_size.x, edge * 0.7)
+	draw_rect(left, Color(1.0, 0.22, 0.20, 0.014 + intensity * 0.018))
+	draw_rect(right, Color(0.20, 0.56, 1.0, 0.016 + intensity * 0.021))
+	draw_rect(top, Color(0.96, 0.24, 0.28, 0.008 + intensity * 0.010))
+	draw_rect(bottom, Color(0.34, 0.62, 1.0, 0.010 + intensity * 0.012))
+
+
+func _draw_postfx_grain(viewport_size: Vector2, intensity: float) -> void:
+	var base_time = floor(_hud_time * 36.0)
+	var alpha = 0.025 + intensity * 0.034
+	for i in range(POSTFX_GRAIN_SAMPLES):
+		var sx = _hash_noise(float(i) * 17.13 + base_time * 0.73)
+		var sy = _hash_noise(float(i) * 31.71 + base_time * 0.57)
+		var x = sx * viewport_size.x
+		var y = sy * viewport_size.y
+		var bright = _hash_noise(float(i) * 9.91 + base_time * 1.37)
+		var tone = 0.46 + bright * 0.52
+		var px = 1.0 + floor(_hash_noise(float(i) * 21.7 + base_time * 0.93) * 2.0)
+		draw_rect(Rect2(x, y, px, px), Color(tone, tone, tone, alpha * (0.5 + bright * 0.7)))
+
+
+func _hash_noise(seed: float) -> float:
+	return fract(sin(seed * 12.9898 + 78.233) * 43758.5453)
 
 
 func _setup_ui() -> void:
@@ -699,6 +780,27 @@ func _update_splashes(delta: float) -> void:
 	queue_redraw()
 
 
+func _update_impact_marks(delta: float) -> void:
+	if _impact_marks.is_empty():
+		return
+
+	for i in range(_impact_marks.size() - 1, -1, -1):
+		var mark: Dictionary = _impact_marks[i]
+		var life = float(mark.get("life", 0.0)) - delta
+		if life <= 0.0:
+			_impact_marks.remove_at(i)
+			continue
+		var pos = mark.get("pos", Vector2.ZERO)
+		pos.y += float(mark.get("fall_speed", 8.0)) * delta
+		pos.x += float(mark.get("drift", 0.0)) * delta * 0.16
+		mark["life"] = life
+		mark["pos"] = pos
+		mark["streak_len"] = minf(float(mark.get("max_streak", 26.0)), float(mark.get("streak_len", 12.0)) + delta * float(mark.get("stretch_speed", 12.0)))
+		_impact_marks[i] = mark
+
+	queue_redraw()
+
+
 func _spawn_splash(origin: Vector2, color: Color, strength: float) -> void:
 	var count = clampi(int(round(2.0 + strength * 3.0)), 2, 8)
 	for _i in range(count):
@@ -717,6 +819,29 @@ func _spawn_splash(origin: Vector2, color: Color, strength: float) -> void:
 
 	if _splashes.size() > 220:
 		_splashes = _splashes.slice(_splashes.size() - 220, _splashes.size())
+
+
+func _spawn_drop_impact(origin: Vector2, color: Color, power: float, radius: float) -> void:
+	var safe_power = clampf(power, 0.2, 2.6)
+	var safe_radius = clampf(radius, 2.5, 16.0)
+	_spawn_splash(origin + Vector2(_rng.randf_range(-3.0, 3.0), _rng.randf_range(-2.0, 2.0)), color, clampf(0.42 + safe_power * 0.36, 0.3, 1.8))
+	_impact_marks.append(
+		{
+			"pos": origin + Vector2(_rng.randf_range(-1.4, 1.4), _rng.randf_range(-1.2, 1.2)),
+			"life": _rng.randf_range(0.85, 1.45) + safe_power * 0.14,
+			"max_life": _rng.randf_range(0.85, 1.45) + safe_power * 0.14,
+			"radius": safe_radius * _rng.randf_range(0.56, 0.92),
+			"width": 1.2 + safe_power * 0.55,
+			"streak_len": 6.0 + safe_radius * 0.6,
+			"max_streak": 18.0 + safe_power * 12.0 + safe_radius * 1.2,
+			"stretch_speed": 9.0 + safe_power * 8.0,
+			"fall_speed": 11.0 + safe_power * 16.0,
+			"drift": _rng.randf_range(-8.0, 8.0),
+			"color": Color(color.r, color.g, color.b, clampf(color.a, 0.35, 0.96)),
+		}
+	)
+	if _impact_marks.size() > 140:
+		_impact_marks = _impact_marks.slice(_impact_marks.size() - 140, _impact_marks.size())
 
 
 func _update_environment_weather() -> void:
@@ -766,6 +891,7 @@ func _start_new_run() -> void:
 	_active_event_time = 0.0
 	_drops.clear()
 	_splashes.clear()
+	_impact_marks.clear()
 
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
@@ -787,6 +913,7 @@ func _enter_contract_selection(message: String) -> void:
 	_active_event_time = 0.0
 	_drops.clear()
 	_splashes.clear()
+	_impact_marks.clear()
 	_focus_zone_active = false
 	_focus_zone_timer = 0.0
 	_focus_zone_duration = 0.0
@@ -851,6 +978,7 @@ func _start_contract() -> void:
 	_active_event.clear()
 	_drops.clear()
 	_splashes.clear()
+	_impact_marks.clear()
 	_flow_combo = 1.0
 	_flow_peak = 1.0
 	_focus_zone_active = false
@@ -1109,6 +1237,7 @@ func _update_drops(delta: float) -> void:
 		var radius = float(drop.get("radius", 6.0))
 		var drift = float(drop.get("drift", 0.0))
 		var power = float(drop.get("power", 1.0))
+		var hit_wall = bool(drop.get("hit_wall", false))
 
 		pos.x += drift * delta
 		pos.y += speed * delta
@@ -1116,11 +1245,16 @@ func _update_drops(delta: float) -> void:
 
 		if wall_rect.has_point(pos):
 			wall.call("damage_at", pos, radius * 2.0, power * damage_scale * delta)
+			if not hit_wall:
+				var drop_color = drop.get("color", Color(0.70, 0.88, 1.0, 0.95))
+				_spawn_drop_impact(pos, drop_color, power, radius)
+				hit_wall = true
 			if _rng.randf() < minf(1.0, delta * (0.8 + power * 0.25)):
 				rain_shake_impulse += 0.0045 * power
 			if _rng.randf() < minf(1.0, delta * 10.0):
 				var drop_color = drop.get("color", Color(0.70, 0.88, 1.0, 0.95))
 				_spawn_splash(pos, drop_color, clampf(power * 0.35, 0.35, 1.2))
+		drop["hit_wall"] = hit_wall
 
 		if pos.y > wall_rect.end.y + 120.0 or pos.x < wall_rect.position.x - 120.0 or pos.x > wall_rect.end.x + 120.0:
 			_drops.remove_at(i)
@@ -1147,6 +1281,7 @@ func _spawn_drop(wall_rect: Rect2, pressure: float, speed_mult: float, radius_mu
 		"radius": base_radius * radius_mult * _rng.randf_range(0.9, 1.15),
 		"drift": _rng.randf_range(-28.0, 28.0) + wind_force,
 		"color": color,
+		"hit_wall": false,
 	})
 
 
@@ -1287,6 +1422,7 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_impact_marks.clear()
 	_focus_zone_active = false
 	_focus_zone_world = Vector2.ZERO
 	_focus_zone_timer = 0.0
@@ -1329,6 +1465,7 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_impact_marks.clear()
 	_focus_zone_active = false
 	_focus_zone_world = Vector2.ZERO
 	_focus_zone_timer = 0.0
@@ -2097,3 +2234,5 @@ func _load_meta_progress() -> void:
 	_meta_best_streak = int(data.get("best_streak", 0))
 	_meta_total_runs = int(data.get("total_runs", 0))
 	_meta_total_credits = int(data.get("total_credits", 0))
+
+

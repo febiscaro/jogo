@@ -55,6 +55,13 @@ var _is_refilling: bool = false
 
 var _anim_time: float = 0.0
 var _rest_positions: Dictionary = {}
+var _move_blend: float = 0.0
+var _lean_blend: float = 0.0
+var _lift_blend: float = 0.0
+var _arm_left_rot: float = 0.0
+var _arm_right_rot: float = 0.0
+var _roller_arm_rot: float = 0.0
+var _head_tilt: float = 0.0
 var _ground_y: float = 595.0
 var _roller_min_x: float = -132.0
 var _roller_max_x: float = 132.0
@@ -75,6 +82,12 @@ func _ready() -> void:
 	for part in [torso, head, arm_left, arm_right, leg_left, leg_right, roller_arm]:
 		if part != null:
 			_rest_positions[part.name] = part.position
+	if arm_left != null:
+		_arm_left_rot = arm_left.rotation
+	if arm_right != null:
+		_arm_right_rot = arm_right.rotation
+	if roller_arm != null:
+		_roller_arm_rot = roller_arm.rotation
 	_apply_roller_limits()
 
 
@@ -221,7 +234,8 @@ func _physics_process(delta: float) -> void:
 	roller.position.x = move_toward(roller.position.x, _roller_target_x, roller_move_speed * 1.20 * delta)
 	roller.scale.x = sign(roller.position.x) if absf(roller.position.x) > 1.0 else _facing
 	var horizontal_ratio = clampf(roller.position.x / maxf(32.0, _roller_max_x), -1.0, 1.0)
-	roller.rotation = deg_to_rad(horizontal_ratio * 9.0)
+	var roller_target_rot = deg_to_rad(horizontal_ratio * 9.0)
+	roller.rotation = lerp_angle(roller.rotation, roller_target_rot, minf(1.0, delta * 11.0))
 	var visual_denominator = maxf(24.0, absf(_roller_max_y - _roller_min_y) * 0.32)
 	var roller_visual_input = clampf((_roller_target_y - roller.position.y) / visual_denominator, -1.0, 1.0)
 
@@ -271,37 +285,53 @@ func _draw() -> void:
 
 
 func _animate_body(move_x: float, roller_input: float, delta: float) -> void:
-	var movement = clampf(absf(move_x), 0.0, 1.0)
-	_anim_time += delta * (2.8 + movement * 7.6)
-	var bob = sin(_anim_time * 4.8) * 2.0 * movement
-	var sway = sin(_anim_time * 3.2) * 1.5 * movement
+	var movement_target = clampf(absf(move_x), 0.0, 1.0)
+	_move_blend = move_toward(_move_blend, movement_target, delta * 4.6)
+	_lean_blend = move_toward(_lean_blend, move_x, delta * 5.8)
 	var lift_ratio = inverse_lerp(_roller_max_y, _roller_min_y, roller.position.y)
+	_lift_blend = move_toward(_lift_blend, lift_ratio, delta * 4.2)
+	_head_tilt = move_toward(_head_tilt, clampf(-_lean_blend * 0.58 + roller_input * 0.34, -1.0, 1.0), delta * 6.4)
+
+	_anim_time += delta * (2.5 + _move_blend * 7.8)
+	var bob = sin(_anim_time * 4.9) * (2.1 + _move_blend * 1.2) * _move_blend
+	var sway = sin(_anim_time * 3.2) * (1.0 + _move_blend * 1.8)
+	var step_cycle = sin(_anim_time * 6.1)
+	var step_weight = absf(step_cycle) * 1.35 * _move_blend
+	var torso_drop = step_weight * 0.32
 
 	if torso != null:
-		torso.position = _rest_position("Torso", torso.position) + Vector2(0.0, bob)
-		torso.rotation = deg_to_rad(2.6 * _facing * movement)
+		torso.position = _rest_position("Torso", torso.position) + Vector2(_lean_blend * 2.1, bob + torso_drop)
+		torso.rotation = deg_to_rad(2.0 * _lean_blend + step_cycle * 1.1 * _move_blend)
 	if head != null:
-		head.position = _rest_position("Head", head.position) + Vector2(0.0, bob * 0.4)
-		head.rotation = deg_to_rad(-3.2 * _facing * movement)
+		head.position = _rest_position("Head", head.position) + Vector2(_lean_blend * 0.8, bob * 0.35 - step_weight * 0.12)
+		head.rotation = deg_to_rad(-2.6 * _head_tilt + sin(_anim_time * 2.1) * 0.8 * _move_blend)
 
-	var arm_swing = sin(_anim_time * 6.2) * 0.22 * movement
+	var arm_swing = sin(_anim_time * 6.1 + PI * 0.18) * 0.19 * _move_blend
+	var arm_left_target = deg_to_rad(5.0 * _lean_blend - _lift_blend * 8.0) - arm_swing
+	var arm_right_target = arm_swing + deg_to_rad(-22.0 - (_lift_blend * 24.0) + roller_input * 8.6 + _lean_blend * 5.6)
+	var roller_arm_target = deg_to_rad(-17.0 - (_lift_blend * 20.0) + roller_input * 6.8 + _lean_blend * 3.0)
+	_arm_left_rot = lerp_angle(_arm_left_rot, arm_left_target, minf(1.0, delta * 9.0))
+	_arm_right_rot = lerp_angle(_arm_right_rot, arm_right_target, minf(1.0, delta * 9.8))
+	_roller_arm_rot = lerp_angle(_roller_arm_rot, roller_arm_target, minf(1.0, delta * 9.4))
+
 	if arm_left != null:
-		arm_left.position = _rest_position("ArmLeft", arm_left.position) + Vector2(-sway * 0.2, bob * 0.45)
-		arm_left.rotation = -arm_swing
+		arm_left.position = _rest_position("ArmLeft", arm_left.position) + Vector2(-sway * 0.22, bob * 0.48 + step_weight * 0.12)
+		arm_left.rotation = _arm_left_rot
 	if arm_right != null:
-		arm_right.position = _rest_position("ArmRight", arm_right.position) + Vector2(sway * 0.24, bob * 0.3)
-		arm_right.rotation = arm_swing + deg_to_rad(-24.0 - (lift_ratio * 22.0) + roller_input * 8.0)
+		arm_right.position = _rest_position("ArmRight", arm_right.position) + Vector2(sway * 0.28, bob * 0.34 + step_weight * 0.18)
+		arm_right.rotation = _arm_right_rot
 	if roller_arm != null:
-		roller_arm.position = _rest_position("RollerArm", roller_arm.position) + Vector2(sway * 0.4, bob * 0.22)
-		roller_arm.rotation = deg_to_rad(-18.0 - (lift_ratio * 18.0) + roller_input * 6.0)
+		roller_arm.position = _rest_position("RollerArm", roller_arm.position) + Vector2(sway * 0.44, bob * 0.24 + step_weight * 0.10)
+		roller_arm.rotation = _roller_arm_rot
 
-	var leg_swing = sin(_anim_time * 6.2 + PI * 0.5) * 1.5 * movement
+	var leg_lift_left = maxf(0.0, sin(_anim_time * 6.1 + PI * 0.5)) * 1.6 * _move_blend
+	var leg_lift_right = maxf(0.0, sin(_anim_time * 6.1 + PI * 1.5)) * 1.6 * _move_blend
 	if leg_left != null:
-		leg_left.position = _rest_position("LegLeft", leg_left.position) + Vector2(0.0, absf(leg_swing) * 0.25)
-		leg_left.rotation = deg_to_rad(-4.0) * movement
+		leg_left.position = _rest_position("LegLeft", leg_left.position) + Vector2(-_lean_blend * 0.5, leg_lift_left * 0.42)
+		leg_left.rotation = deg_to_rad((-3.0 + step_cycle * 1.6) * _move_blend)
 	if leg_right != null:
-		leg_right.position = _rest_position("LegRight", leg_right.position) + Vector2(0.0, absf(-leg_swing) * 0.25)
-		leg_right.rotation = deg_to_rad(4.0) * movement
+		leg_right.position = _rest_position("LegRight", leg_right.position) + Vector2(_lean_blend * 0.5, leg_lift_right * 0.42)
+		leg_right.rotation = deg_to_rad((3.0 - step_cycle * 1.6) * _move_blend)
 
 
 func _rest_position(name: String, fallback: Vector2) -> Vector2:
