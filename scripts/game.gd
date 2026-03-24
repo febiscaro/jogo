@@ -98,6 +98,9 @@ var _base_scene_position: Vector2 = Vector2.ZERO
 var _camera_shake_strength: float = 0.0
 var _contract_target_color: Color = Color(0.31, 0.62, 0.90, 1.0)
 var _color_match_ratio: float = 1.0
+var _contract_pattern_mode: String = "solid"
+var _contract_pattern_colors: Array[int] = [0]
+var _contract_pattern_label: String = "Cor unica"
 
 
 func _ready() -> void:
@@ -536,7 +539,7 @@ func _get_palette_name(index: int) -> String:
 		0:
 			return "Azul"
 		1:
-			return "Laranja"
+			return "Vermelho"
 		2:
 			return "Verde"
 		3:
@@ -547,7 +550,7 @@ func _get_palette_name(index: int) -> String:
 func _get_palette_colors() -> Array[Color]:
 	return [
 		Color(0.31, 0.62, 0.90, 1.0),
-		Color(0.94, 0.57, 0.25, 1.0),
+		Color(0.89, 0.30, 0.27, 1.0),
 		Color(0.24, 0.74, 0.50, 1.0),
 		Color(0.67, 0.45, 0.88, 1.0),
 	]
@@ -573,6 +576,44 @@ func _palette_name_for_color(color: Color) -> String:
 	return _get_palette_name(_nearest_palette_index_for_color(color))
 
 
+func _color_similarity(a: Color, b: Color) -> float:
+	var dr = a.r - b.r
+	var dg = a.g - b.g
+	var db = a.b - b.b
+	var dist = sqrt((dr * dr) + (dg * dg) + (db * db))
+	return clampf(1.0 - (dist / 1.32), 0.0, 1.0)
+
+
+func _sanitize_pattern_colors(raw_value) -> Array[int]:
+	var result: Array[int] = []
+	var max_index = _get_palette_colors().size() - 1
+	if raw_value is Array:
+		var input = raw_value as Array
+		for entry in input:
+			var idx = clampi(int(entry), 0, max_index)
+			if not result.has(idx):
+				result.append(idx)
+	if result.is_empty():
+		result.append(0)
+	return result
+
+
+func _build_pattern_label(mode: String, colors: Array[int]) -> String:
+	var names: Array[String] = []
+	for idx in colors:
+		names.append(_get_palette_name(int(idx)))
+	var joined = "/".join(names)
+	match mode:
+		"stripe_h":
+			return "Listras Horizontais (%s)" % joined
+		"stripe_v":
+			return "Listras Verticais (%s)" % joined
+		"checker":
+			return "Quadriculado (%s)" % joined
+		_:
+			return "Cor unica (%s)" % joined
+
+
 func _update_color_efficiency(selected_color: Color) -> void:
 	if _state != STATE_IN_CONTRACT:
 		_color_match_ratio = 1.0
@@ -583,18 +624,18 @@ func _update_color_efficiency(selected_color: Color) -> void:
 			color_value.modulate = selected_color
 		return
 
-	var dr = selected_color.r - _contract_target_color.r
-	var dg = selected_color.g - _contract_target_color.g
-	var db = selected_color.b - _contract_target_color.b
-	var dist = sqrt((dr * dr) + (dg * dg) + (db * db))
-	_color_match_ratio = clampf(1.0 - (dist / 1.15), 0.0, 1.0)
+	var expected_color = _contract_target_color
+	if player.has_method("get_roller_position") and wall.has_method("get_target_color_at"):
+		var roller_pos: Vector2 = player.call("get_roller_position")
+		expected_color = wall.call("get_target_color_at", roller_pos)
+	_color_match_ratio = _color_similarity(selected_color, expected_color)
 
-	var paint_mult = lerpf(0.66, 1.20, _color_match_ratio)
-	var drain_mult = lerpf(1.38, 0.84, _color_match_ratio)
+	var paint_mult = lerpf(0.60, 1.24, _color_match_ratio)
+	var drain_mult = lerpf(1.44, 0.82, _color_match_ratio)
 	if player.has_method("set_color_efficiency"):
 		player.call("set_color_efficiency", paint_mult, drain_mult)
 
-	var match_label = "Fraca"
+	var match_label = "Errada"
 	if _color_match_ratio >= 0.9:
 		match_label = "Perfeita"
 	elif _color_match_ratio >= 0.68:
@@ -769,12 +810,18 @@ func _start_contract() -> void:
 		swatch_green.color,
 		swatch_purple.color,
 	]
-	var contract_color_raw: Color = _selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0))
-	var target_index = _nearest_palette_index_for_color(contract_color_raw)
+	_contract_pattern_mode = String(_selected_contract.get("pattern_mode", "solid"))
+	_contract_pattern_colors = _sanitize_pattern_colors(_selected_contract.get("pattern_colors", [0]))
+	_contract_pattern_label = _build_pattern_label(_contract_pattern_mode, _contract_pattern_colors)
+	var target_index = clampi(_contract_pattern_colors[0], 0, _palette.size() - 1)
 	_contract_target_color = _palette[target_index]
 
 	var config = {
 		"paint_color": _contract_target_color,
+		"palette": _palette,
+		"pattern_mode": _contract_pattern_mode,
+		"pattern_colors": _contract_pattern_colors,
+		"stripe_width_cells": int(_selected_contract.get("stripe_width_cells", 3)),
 		"initial_min_coverage": _selected_contract.get("initial_min", 0.54),
 		"initial_max_coverage": _selected_contract.get("initial_max", 0.72),
 	}
@@ -818,11 +865,11 @@ func _start_contract() -> void:
 
 	_hide_choice_panel()
 	center_message.visible = true
-	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+	top_status.text = "Contrato: %s | %s" % [
 		_selected_contract.get("title", "Sem nome"),
-		_palette_name_for_color(_contract_target_color),
+		_contract_pattern_label,
 	]
-	center_message.text = "Cor alvo %s: combina melhor, cobre mais e gasta menos." % _palette_name_for_color(_contract_target_color)
+	center_message.text = "Pinte seguindo o padrao: %s." % _contract_pattern_label
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -837,6 +884,8 @@ func _process_contract(delta: float) -> void:
 	var duration = float(_selected_contract.get("duration", 60.0))
 	var target = clampf(float(_selected_contract.get("target_coverage", 0.68)) + float(_run_modifiers.get("target_offset", 0.0)), 0.35, 0.95)
 	var fail_threshold = clampf(float(_selected_contract.get("fail_coverage", 0.21)) + float(_run_modifiers.get("fail_offset", 0.0)), 0.05, 0.65)
+	if not _palette.is_empty():
+		_update_color_efficiency(_palette[_selected_color_index])
 
 	_update_contract_hud(coverage, duration, target)
 	if player.has_method("is_painting") and bool(player.call("is_painting")) and player.has_method("get_roller_position"):
@@ -989,9 +1038,9 @@ func _clear_active_event() -> void:
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
 	event_value.text = "Calmo"
-	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+	top_status.text = "Contrato: %s | %s" % [
 		_selected_contract.get("title", "Sem nome"),
-		_palette_name_for_color(_contract_target_color),
+		_contract_pattern_label,
 	]
 	center_message.text = "Continue o retoque."
 
@@ -1003,7 +1052,7 @@ func _event_value(key: String, default_value: float) -> float:
 
 
 func _update_contract_hud(coverage: float, duration: float, target: float) -> void:
-	coverage_title.text = "Meta: %d%%" % int(round(target * 100.0))
+	coverage_title.text = "Meta acabamento: %d%%" % int(round(target * 100.0))
 	coverage_value.text = "%d%%" % int(round(coverage * 100.0))
 	var remaining = maxf(0.0, duration - _elapsed)
 	time_title.text = "Tempo restante"
@@ -1031,6 +1080,8 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 
 	risk_value.text = _selected_contract.get("risk_label", "-")
 	if _active_event.is_empty():
+		if _color_match_ratio <= 0.38:
+			center_message.text = "Cor errada para essa faixa. Troque a tinta."
 		if refilling:
 			center_message.text = "Recarregando no balde..."
 		elif paint_ratio <= 0.08 and bucket_ratio <= 0.01:
@@ -1232,6 +1283,26 @@ func _generate_contract_offers() -> Array[Dictionary]:
 
 
 func _roll_contract(template: Dictionary) -> Dictionary:
+	var palette = _get_palette_colors()
+	var base_color = template.get("paint_color", Color(0.31, 0.62, 0.90, 1.0))
+	var base_color_index = _nearest_palette_index_for_color(base_color)
+	var pattern_mode = "solid"
+	var pattern_colors: Array[int] = [base_color_index]
+	var stripe_width_cells = 3
+	var pattern_bonus = 0.0
+
+	var presets = template.get("pattern_presets", [])
+	if presets is Array and not presets.is_empty():
+		var preset = presets[_rng.randi_range(0, presets.size() - 1)]
+		if preset is Dictionary:
+			var preset_data = preset as Dictionary
+			pattern_mode = String(preset_data.get("mode", "solid"))
+			pattern_colors = _sanitize_pattern_colors(preset_data.get("colors", pattern_colors))
+			var stripe_min = maxi(1, int(preset_data.get("stripe_min", 2)))
+			var stripe_max = maxi(stripe_min, int(preset_data.get("stripe_max", 4)))
+			stripe_width_cells = _rng.randi_range(stripe_min, stripe_max)
+			pattern_bonus = float(preset_data.get("target_bonus", 0.0))
+
 	var day_scale = 1.0 + float(maxi(0, _run_day - 1)) * 0.08
 	var duration = _rng.randf_range(float(template.get("duration_min", 45.0)), float(template.get("duration_max", 80.0)))
 	var target = clampf(
@@ -1253,8 +1324,14 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 	var drop_power = _rng.randf_range(float(template.get("drop_power_min", 0.7)), float(template.get("drop_power_max", 1.2))) * (1.0 + float(maxi(0, _run_day - 1)) * 0.04)
 	var drop_radius = _rng.randf_range(float(template.get("drop_radius_min", 5.0)), float(template.get("drop_radius_max", 9.0)))
 	var event_frequency = _rng.randf_range(float(template.get("event_min", 0.3)), float(template.get("event_max", 0.65)))
+	if pattern_mode != "solid" and pattern_colors.size() >= 2:
+		target = clampf(target + pattern_bonus, 0.52, 0.90)
+		fail_threshold = clampf(fail_threshold + 0.01, 0.08, 0.45)
+		payout = int(round(float(payout) * 1.16))
 
 	var danger_score = ((1.0 / drop_interval) * drop_power * (drop_speed / 180.0) * (target + event_frequency))
+	if pattern_mode != "solid":
+		danger_score *= 1.10
 	var risk = "Baixo"
 	if danger_score >= 3.1 and danger_score < 4.2:
 		risk = "Medio"
@@ -1262,6 +1339,9 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 		risk = "Alto"
 	elif danger_score >= 5.7:
 		risk = "Extremo"
+
+	var primary_index = pattern_colors[0]
+	var primary_color = palette[clampi(primary_index, 0, palette.size() - 1)]
 
 	return {
 		"title": template.get("title", "Contrato"),
@@ -1276,7 +1356,10 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 		"drop_power": drop_power,
 		"drop_radius": drop_radius,
 		"event_frequency": event_frequency,
-		"paint_color": template.get("paint_color", Color(0.31, 0.62, 0.90, 1.0)),
+		"paint_color": primary_color,
+		"pattern_mode": pattern_mode,
+		"pattern_colors": pattern_colors,
+		"stripe_width_cells": stripe_width_cells,
 		"drop_color": template.get("drop_color", Color(0.70, 0.88, 1.0, 0.95)),
 		"initial_min": template.get("initial_min", 0.52),
 		"initial_max": template.get("initial_max", 0.75),
@@ -1286,17 +1369,19 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 
 
 func _format_contract(index: int, contract: Dictionary) -> String:
-	var target_color_name = _palette_name_for_color(contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0)))
+	var pattern_mode = String(contract.get("pattern_mode", "solid"))
+	var pattern_colors = _sanitize_pattern_colors(contract.get("pattern_colors", [0]))
+	var pattern_label = _build_pattern_label(pattern_mode, pattern_colors)
 	return (
 		"%d) %s  [%s]\n"
-		+ "Cliente: %s | Cor alvo: %s\n"
+		+ "Cliente: %s | Padrao: %s\n"
 		+ "Tempo %.0fs | Meta %d%% | Ruina %d%% | C$%d"
 	) % [
 		index + 1,
 		contract.get("title", "Contrato"),
 		contract.get("risk_label", ""),
 		contract.get("client", "Cliente"),
-		target_color_name,
+		pattern_label,
 		float(contract.get("duration", 60.0)),
 		int(round(float(contract.get("target_coverage", 0.7)) * 100.0)),
 		int(round(float(contract.get("fail_coverage", 0.2)) * 100.0)),
@@ -1344,9 +1429,9 @@ func _resume_contract() -> void:
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", true)
 	_hide_choice_panel()
-	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+	top_status.text = "Contrato: %s | %s" % [
 		_selected_contract.get("title", "Sem nome"),
-		_palette_name_for_color(_contract_target_color),
+		_contract_pattern_label,
 	]
 	center_message.visible = true
 	center_message.text = _active_event.get("description", "Continue o retoque.") if not _active_event.is_empty() else "Continue o retoque."
@@ -1439,6 +1524,10 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"drop_color": Color(0.75, 0.90, 1.0, 0.95),
 			"initial_min": 0.56,
 			"initial_max": 0.78,
+			"pattern_presets": [
+				{"mode": "solid", "colors": [0], "target_bonus": 0.0},
+				{"mode": "stripe_h", "colors": [0, 1], "stripe_min": 3, "stripe_max": 4, "target_bonus": 0.02},
+			],
 		},
 		{
 			"tier": 2,
@@ -1467,6 +1556,10 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"drop_color": Color(0.72, 0.86, 1.0, 0.94),
 			"initial_min": 0.54,
 			"initial_max": 0.74,
+			"pattern_presets": [
+				{"mode": "solid", "colors": [1], "target_bonus": 0.0},
+				{"mode": "stripe_v", "colors": [1, 0], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.03},
+			],
 		},
 		{
 			"tier": 3,
@@ -1495,6 +1588,43 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"drop_color": Color(0.68, 0.92, 0.84, 0.92),
 			"initial_min": 0.50,
 			"initial_max": 0.72,
+			"pattern_presets": [
+				{"mode": "solid", "colors": [2], "target_bonus": 0.0},
+				{"mode": "stripe_h", "colors": [2, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.04},
+				{"mode": "checker", "colors": [2, 0], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.05},
+			],
+		},
+		{
+			"tier": 3,
+			"title": "Passarela Rubro-Mar",
+			"client": "Condominio Atlante",
+			"description": "Faixas azul e vermelho exigem recorte preciso e troca constante de tinta.",
+			"duration_min": 60.0,
+			"duration_max": 86.0,
+			"target_min": 0.63,
+			"target_max": 0.78,
+			"fail_min": 0.15,
+			"fail_max": 0.24,
+			"payout_min": 190.0,
+			"payout_max": 295.0,
+			"drop_interval_min": 0.45,
+			"drop_interval_max": 0.70,
+			"drop_speed_min": 165.0,
+			"drop_speed_max": 240.0,
+			"drop_power_min": 0.72,
+			"drop_power_max": 1.14,
+			"drop_radius_min": 6.8,
+			"drop_radius_max": 10.8,
+			"event_min": 0.40,
+			"event_max": 0.80,
+			"paint_color": Color(0.31, 0.62, 0.90, 1.0),
+			"drop_color": Color(0.72, 0.89, 1.0, 0.92),
+			"initial_min": 0.49,
+			"initial_max": 0.71,
+			"pattern_presets": [
+				{"mode": "stripe_h", "colors": [0, 1], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.06},
+				{"mode": "stripe_v", "colors": [0, 1], "stripe_min": 2, "stripe_max": 4, "target_bonus": 0.06},
+			],
 		},
 		{
 			"tier": 4,
@@ -1523,6 +1653,43 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"drop_color": Color(0.78, 0.80, 1.0, 0.9),
 			"initial_min": 0.49,
 			"initial_max": 0.70,
+			"pattern_presets": [
+				{"mode": "solid", "colors": [3], "target_bonus": 0.0},
+				{"mode": "stripe_v", "colors": [3, 0, 1], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.06},
+				{"mode": "checker", "colors": [3, 2], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.07},
+			],
+		},
+		{
+			"tier": 4,
+			"title": "Fachada Arco Linear",
+			"client": "Instituto Aurora",
+			"description": "Contrato artistico: parede em listras triplas com chuva lateral severa.",
+			"duration_min": 64.0,
+			"duration_max": 92.0,
+			"target_min": 0.68,
+			"target_max": 0.82,
+			"fail_min": 0.16,
+			"fail_max": 0.25,
+			"payout_min": 250.0,
+			"payout_max": 360.0,
+			"drop_interval_min": 0.40,
+			"drop_interval_max": 0.63,
+			"drop_speed_min": 185.0,
+			"drop_speed_max": 270.0,
+			"drop_power_min": 0.86,
+			"drop_power_max": 1.28,
+			"drop_radius_min": 7.2,
+			"drop_radius_max": 11.8,
+			"event_min": 0.52,
+			"event_max": 0.90,
+			"paint_color": Color(0.31, 0.62, 0.90, 1.0),
+			"drop_color": Color(0.80, 0.84, 1.0, 0.90),
+			"initial_min": 0.48,
+			"initial_max": 0.69,
+			"pattern_presets": [
+				{"mode": "stripe_h", "colors": [0, 1, 2], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.07},
+				{"mode": "stripe_v", "colors": [0, 1, 2], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.07},
+			],
 		},
 		{
 			"tier": 5,
@@ -1551,6 +1718,10 @@ func _build_contract_templates() -> Array[Dictionary]:
 			"drop_color": Color(0.96, 0.86, 0.72, 0.9),
 			"initial_min": 0.46,
 			"initial_max": 0.68,
+			"pattern_presets": [
+				{"mode": "stripe_v", "colors": [1, 0, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.08},
+				{"mode": "checker", "colors": [0, 1, 2, 3], "stripe_min": 2, "stripe_max": 3, "target_bonus": 0.09},
+			],
 		},
 	]
 

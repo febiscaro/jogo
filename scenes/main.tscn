@@ -62,7 +62,7 @@ offset_left = 96.0
 offset_top = 56.0
 offset_right = 160.0
 offset_bottom = 120.0
-color = Color(0.95, 0.58, 0.27, 1)
+color = Color(0.89, 0.3, 0.27, 1)
 
 [node name="SwatchGreen" type="ColorRect" parent="UI/Sidebar" unique_id=1124044727]
 layout_mode = 0

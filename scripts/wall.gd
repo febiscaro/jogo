@@ -13,16 +13,30 @@ extends Node2D
 @export var drip_rate: float = 0.34
 @export var drip_spread: float = 0.58
 @export var drip_loss_rate: float = 0.06
+@export var guide_alpha: float = 0.20
 
 var _columns: int = 0
 var _rows: int = 0
 var _coverage: PackedFloat32Array = PackedFloat32Array()
 var _avg_coverage: float = 0.0
+var _progress_ratio: float = 0.0
+var _avg_color_match: float = 1.0
 var _lowest_coverage: float = 0.0
 var _lowest_index: int = 0
 var _anim_time: float = 0.0
 var _drip_intensity: float = 0.0
 var _damage_heat: float = 0.0
+var _palette: Array[Color] = [
+	Color(0.31, 0.62, 0.90, 1.0),
+	Color(0.89, 0.30, 0.27, 1.0),
+	Color(0.24, 0.74, 0.50, 1.0),
+	Color(0.67, 0.45, 0.88, 1.0),
+]
+var _cell_paint_color: PackedColorArray = PackedColorArray()
+var _target_color_indices: PackedInt32Array = PackedInt32Array()
+var _pattern_mode: String = "solid"
+var _pattern_colors: Array[int] = [0]
+var _stripe_width_cells: int = 3
 
 
 func _ready() -> void:
@@ -49,8 +63,32 @@ func configure(config: Dictionary) -> void:
 		paint_color = config["paint_color"]
 	if config.has("frame_color"):
 		frame_color = config["frame_color"]
+	if config.has("palette"):
+		var palette_input = config["palette"]
+		if palette_input is Array:
+			var incoming = palette_input as Array
+			_palette.clear()
+			for entry in incoming:
+				if entry is Color:
+					_palette.append(entry)
+	if _palette.is_empty():
+		_palette = [
+			Color(0.31, 0.62, 0.90, 1.0),
+			Color(0.89, 0.30, 0.27, 1.0),
+			Color(0.24, 0.74, 0.50, 1.0),
+			Color(0.67, 0.45, 0.88, 1.0),
+		]
+	if config.has("pattern_mode"):
+		_pattern_mode = String(config["pattern_mode"])
+	if config.has("stripe_width_cells"):
+		_stripe_width_cells = maxi(1, int(config["stripe_width_cells"]))
+	if config.has("pattern_colors"):
+		_pattern_colors = _sanitize_pattern_colors(config["pattern_colors"])
+	else:
+		_pattern_colors = _sanitize_pattern_colors(_pattern_colors)
 
 	_setup_grid()
+	_build_target_pattern()
 	var reset_min = initial_min_coverage
 	var reset_max = initial_max_coverage
 	if config.has("initial_min_coverage"):
@@ -68,11 +106,24 @@ func set_paint_color(color: Color) -> void:
 func reset_coverage(min_coverage: float, max_coverage: float) -> void:
 	if _coverage.is_empty():
 		_setup_grid()
+	if _target_color_indices.is_empty():
+		_build_target_pattern()
 
 	var safe_min = clampf(min_coverage, 0.0, 1.0)
 	var safe_max = clampf(max_coverage, safe_min, 1.0)
-	for index in _coverage.size():
-		_coverage[index] = randf_range(safe_min, safe_max)
+	for index in range(_coverage.size()):
+		var coverage = randf_range(safe_min, safe_max)
+		_coverage[index] = coverage
+		var target_color = _target_color_for_cell(index)
+		var noise = randf_range(-0.05, 0.05)
+		var cell_color = Color(
+			clampf(target_color.r + noise, 0.0, 1.0),
+			clampf(target_color.g + noise, 0.0, 1.0),
+			clampf(target_color.b + noise, 0.0, 1.0),
+			1.0
+		)
+		var faded = base_color.lerp(cell_color, clampf(coverage * 0.86, 0.22, 1.0))
+		_cell_paint_color[index] = faded
 
 	_recalculate_cache()
 	queue_redraw()
@@ -83,11 +134,29 @@ func get_wall_rect_global() -> Rect2:
 
 
 func get_coverage_ratio() -> float:
+	return _progress_ratio
+
+
+func get_raw_coverage_ratio() -> float:
 	return _avg_coverage
+
+
+func get_color_match_ratio() -> float:
+	return _avg_color_match
 
 
 func get_lowest_coverage() -> float:
 	return _lowest_coverage
+
+
+func get_target_color_at(world_position: Vector2) -> Color:
+	if _coverage.is_empty():
+		return paint_color
+	var local = to_local(world_position)
+	var col = clampi(int(floor(local.x / cell_size)), 0, _columns - 1)
+	var row = clampi(int(floor(local.y / cell_size)), 0, _rows - 1)
+	var index = row * _columns + col
+	return _target_color_for_cell(index)
 
 
 func get_lowest_cell_world_pos() -> Vector2:
@@ -130,9 +199,14 @@ func _setup_grid() -> void:
 	_columns = maxi(1, int(ceil(wall_size.x / cell_size)))
 	_rows = maxi(1, int(ceil(wall_size.y / cell_size)))
 
-	_coverage.resize(_columns * _rows)
-	for index in _coverage.size():
+	var total_cells = _columns * _rows
+	_coverage.resize(total_cells)
+	_cell_paint_color.resize(total_cells)
+	_target_color_indices.resize(total_cells)
+	for index in range(total_cells):
 		_coverage[index] = 0.0
+		_cell_paint_color[index] = paint_color
+		_target_color_indices[index] = 0
 
 	_recalculate_cache()
 
@@ -140,20 +214,29 @@ func _setup_grid() -> void:
 func _recalculate_cache() -> void:
 	if _coverage.is_empty():
 		_avg_coverage = 0.0
+		_progress_ratio = 0.0
+		_avg_color_match = 1.0
 		_lowest_coverage = 0.0
 		return
 
 	var total = 0.0
+	var total_progress = 0.0
+	var total_match = 0.0
 	var lowest = 1.0
 	var lowest_index = 0
 	for i in range(_coverage.size()):
 		var amount = _coverage[i]
 		total += amount
+		var match = _color_match_ratio(_cell_paint_color[i], _target_color_for_cell(i))
+		total_match += match
+		total_progress += amount * lerpf(0.30, 1.0, match)
 		if amount < lowest:
 			lowest = amount
 			lowest_index = i
 
 	_avg_coverage = total / float(_coverage.size())
+	_progress_ratio = total_progress / float(_coverage.size())
+	_avg_color_match = total_match / float(_coverage.size())
 	_lowest_coverage = lowest
 	_lowest_index = lowest_index
 
@@ -182,9 +265,25 @@ func _affect_cells(world_position: Vector2, radius: float, delta_strength: float
 				continue
 
 			var falloff = 1.0 - (distance / radius)
-			var next_value = clampf(_coverage[index] + (delta_strength * falloff), 0.0, 1.0)
-			if not is_equal_approx(next_value, _coverage[index]):
+			var previous_value = _coverage[index]
+			var next_value = previous_value
+			var previous_color = _cell_paint_color[index]
+			var next_color = previous_color
+			if delta_strength > 0.0:
+				var target_color = _target_color_for_cell(index)
+				var color_match = _color_match_ratio(paint_color, target_color)
+				var efficiency = lerpf(0.28, 1.22, color_match)
+				next_value = clampf(previous_value + (delta_strength * falloff * efficiency), 0.0, 1.0)
+				var blend = clampf(delta_strength * falloff * (0.62 + efficiency * 0.38), 0.0, 1.0)
+				next_color = previous_color.lerp(paint_color, blend)
+			else:
+				next_value = clampf(previous_value + (delta_strength * falloff), 0.0, 1.0)
+				var fade_back = clampf(absf(delta_strength) * falloff * 0.24, 0.0, 0.8)
+				next_color = previous_color.lerp(base_color, fade_back)
+
+			if not is_equal_approx(next_value, previous_value) or next_color != previous_color:
 				_coverage[index] = next_value
+				_cell_paint_color[index] = next_color
 				changed = true
 
 	if changed:
@@ -200,7 +299,8 @@ func _draw() -> void:
 		for col in range(_columns):
 			var index = row * _columns + col
 			var coverage = _coverage[index]
-			var tint = base_color.lerp(paint_color, coverage)
+			var cell_paint = _cell_paint_color[index]
+			var tint = base_color.lerp(cell_paint, coverage)
 			var noise = _get_cell_noise(col, row)
 			tint = tint.lightened(noise * 0.22)
 			tint = tint.darkened((1.0 - coverage) * 0.08)
@@ -223,6 +323,7 @@ func _draw() -> void:
 				var streak_len = 6.0 + (1.0 - coverage) * 14.0
 				draw_line(streak_top, streak_top + Vector2(0.0, streak_len), Color(grime_color.r, grime_color.g, grime_color.b, 0.28), 1.0)
 
+	_draw_pattern_guides()
 	_draw_weakest_marker()
 	_draw_shine()
 	_draw_frame_details()
@@ -303,6 +404,104 @@ func _simulate_runoff(delta: float) -> void:
 	if changed:
 		_coverage = next_coverage
 		_recalculate_cache()
+
+
+func _sanitize_pattern_colors(raw_value) -> Array[int]:
+	var result: Array[int] = []
+	if raw_value is Array:
+		for entry in raw_value:
+			var idx = clampi(int(entry), 0, _palette.size() - 1)
+			if not result.has(idx):
+				result.append(idx)
+	if result.is_empty():
+		result.append(0)
+	return result
+
+
+func _build_target_pattern() -> void:
+	if _target_color_indices.is_empty():
+		return
+	_pattern_colors = _sanitize_pattern_colors(_pattern_colors)
+	var stripe_size = maxi(1, _stripe_width_cells)
+	for row in range(_rows):
+		for col in range(_columns):
+			var index = row * _columns + col
+			var palette_index = _pattern_colors[0]
+			match _pattern_mode:
+				"stripe_h":
+					var band_h = int(floor(float(row) / float(stripe_size))) % _pattern_colors.size()
+					palette_index = _pattern_colors[band_h]
+				"stripe_v":
+					var band_v = int(floor(float(col) / float(stripe_size))) % _pattern_colors.size()
+					palette_index = _pattern_colors[band_v]
+				"checker":
+					var band_c = (int(floor(float(col) / float(stripe_size))) + int(floor(float(row) / float(stripe_size)))) % _pattern_colors.size()
+					palette_index = _pattern_colors[band_c]
+				_:
+					palette_index = _pattern_colors[0]
+			_target_color_indices[index] = clampi(palette_index, 0, _palette.size() - 1)
+
+
+func _target_color_for_cell(index: int) -> Color:
+	if _palette.is_empty():
+		return paint_color
+	if index < 0 or index >= _target_color_indices.size():
+		return _palette[0]
+	var color_index = clampi(_target_color_indices[index], 0, _palette.size() - 1)
+	return _palette[color_index]
+
+
+func _color_match_ratio(a: Color, b: Color) -> float:
+	var dr = a.r - b.r
+	var dg = a.g - b.g
+	var db = a.b - b.b
+	var dist = sqrt((dr * dr) + (dg * dg) + (db * db))
+	return clampf(1.0 - (dist / 1.32), 0.0, 1.0)
+
+
+func _draw_pattern_guides() -> void:
+	if _pattern_mode == "solid" or _target_color_indices.is_empty():
+		return
+
+	var stripe_size = maxi(1, _stripe_width_cells)
+	match _pattern_mode:
+		"stripe_h":
+			var y = 0.0
+			var band = 0
+			while y < wall_size.y:
+				var idx = _pattern_colors[band % _pattern_colors.size()]
+				var color = _palette[clampi(idx, 0, _palette.size() - 1)]
+				var h = minf(float(stripe_size) * cell_size, wall_size.y - y)
+				draw_rect(Rect2(0.0, y, wall_size.x, h), Color(color.r, color.g, color.b, guide_alpha * 0.34))
+				draw_line(Vector2(0.0, y), Vector2(wall_size.x, y), Color(1.0, 1.0, 1.0, 0.16), 1.0)
+				y += float(stripe_size) * cell_size
+				band += 1
+		"stripe_v":
+			var x = 0.0
+			var band_v = 0
+			while x < wall_size.x:
+				var idx_v = _pattern_colors[band_v % _pattern_colors.size()]
+				var color_v = _palette[clampi(idx_v, 0, _palette.size() - 1)]
+				var w = minf(float(stripe_size) * cell_size, wall_size.x - x)
+				draw_rect(Rect2(x, 0.0, w, wall_size.y), Color(color_v.r, color_v.g, color_v.b, guide_alpha * 0.34))
+				draw_line(Vector2(x, 0.0), Vector2(x, wall_size.y), Color(1.0, 1.0, 1.0, 0.16), 1.0)
+				x += float(stripe_size) * cell_size
+				band_v += 1
+		"checker":
+			var block = float(stripe_size) * cell_size
+			for row in range(int(ceil(wall_size.y / block))):
+				for col in range(int(ceil(wall_size.x / block))):
+					var idx_c = _pattern_colors[(row + col) % _pattern_colors.size()]
+					var color_c = _palette[clampi(idx_c, 0, _palette.size() - 1)]
+					var rect = Rect2(
+						Vector2(float(col) * block, float(row) * block),
+						Vector2(minf(block, wall_size.x - float(col) * block), minf(block, wall_size.y - float(row) * block))
+					)
+					draw_rect(rect, Color(color_c.r, color_c.g, color_c.b, guide_alpha * 0.22))
+		_:
+			pass
+
+	draw_rect(Rect2(Vector2.ZERO, wall_size), Color(1.0, 1.0, 1.0, 0.10), false, 1.0)
 
 
 func _draw_weakest_marker() -> void:
