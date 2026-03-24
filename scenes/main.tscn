@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://bxpbvcbiu4t8k" path="res://scripts/game.gd" id="2_mitcd"]
 [ext_resource type="Script" uid="uid://mudelwur7kc1" path="res://scripts/wall.gd" id="3_l2wns"]
 [ext_resource type="Script" path="res://scripts/environment.gd" id="4_j2ct4"]
+[ext_resource type="Script" path="res://scripts/bucket.gd" id="5_5aicp"]
 
 [node name="Main" type="Node2D" unique_id=1595961631]
 script = ExtResource("2_mitcd")
@@ -22,6 +23,10 @@ script = ExtResource("4_j2ct4")
 [node name="Wall" type="Node2D" parent="." unique_id=1062166686]
 position = Vector2(300, 95)
 script = ExtResource("3_l2wns")
+
+[node name="Bucket" type="Node2D" parent="."]
+position = Vector2(248, 490)
+script = ExtResource("5_5aicp")
 
 [node name="Player" parent="." unique_id=836326921 instance=ExtResource("1_vah6k")]
 position = Vector2(640, 595)

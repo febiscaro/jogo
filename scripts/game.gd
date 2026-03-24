@@ -34,6 +34,7 @@ const MULTIPLIER_KEYS = [
 @onready var swatch_green: ColorRect = $UI/Sidebar/SwatchGreen
 @onready var swatch_purple: ColorRect = $UI/Sidebar/SwatchPurple
 @onready var environment: Node = $Environment
+@onready var bucket: Node2D = get_node_or_null("Bucket") as Node2D
 
 var _palette: Array[Color] = []
 var _selected_color_index: int = 0
@@ -186,6 +187,9 @@ func _draw() -> void:
 
 func _setup_ui() -> void:
 	title_label.text = "Painel"
+	var stat_left = 20.0
+	var stat_right = 216.0
+
 	var sidebar_style = StyleBoxFlat.new()
 	sidebar_style.bg_color = Color(0.16, 0.19, 0.24, 0.88)
 	sidebar_style.border_color = Color(0.55, 0.73, 0.95, 0.42)
@@ -198,24 +202,36 @@ func _setup_ui() -> void:
 	sidebar_style.shadow_size = 8
 	sidebar.add_theme_stylebox_override("panel", sidebar_style)
 	sidebar.self_modulate = Color(0.94, 0.95, 0.96, 0.98)
+	sidebar.offset_right = 290.0
+	sidebar.offset_bottom = 702.0
+
+	coverage_title.offset_left = stat_left
 	coverage_title.offset_top = 262.0
+	coverage_title.offset_right = stat_right
 	coverage_title.offset_bottom = 284.0
+	coverage_value.offset_left = stat_left
 	coverage_value.offset_top = 286.0
+	coverage_value.offset_right = stat_right
 	coverage_value.offset_bottom = 334.0
 	coverage_value.add_theme_font_size_override("font_size", 36)
-	time_title.offset_top = 352.0
-	time_title.offset_bottom = 374.0
-	time_value.offset_top = 376.0
-	time_value.offset_bottom = 424.0
+	time_title.offset_left = stat_left
+	time_title.offset_top = 336.0
+	time_title.offset_right = stat_right
+	time_title.offset_bottom = 358.0
+	time_value.offset_left = stat_left
+	time_value.offset_top = 360.0
+	time_value.offset_right = stat_right
+	time_value.offset_bottom = 408.0
 	time_value.add_theme_font_size_override("font_size", 36)
+
 	help_label.layout_mode = 0
-	help_label.offset_left = 20.0
-	help_label.offset_top = 674.0
-	help_label.offset_right = 180.0
-	help_label.offset_bottom = 698.0
-	help_label.add_theme_font_size_override("font_size", 12)
+	help_label.offset_left = stat_left
+	help_label.offset_top = 672.0
+	help_label.offset_right = stat_right
+	help_label.offset_bottom = 700.0
+	help_label.add_theme_font_size_override("font_size", 11)
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.text = "A/D anda | W/S sobe o rolo | 1-4 cor"
+	help_label.text = "A/D move | W/S rolo\nE recarrega | 1-4 cor"
 	_style_label(title_label, Color(0.95, 0.98, 1.0, 1.0), 2, Color(0.08, 0.11, 0.17, 0.9))
 	_style_label(coverage_title, Color(0.77, 0.88, 0.99, 1.0))
 	_style_label(time_title, Color(0.77, 0.88, 0.99, 1.0))
@@ -226,25 +242,27 @@ func _setup_ui() -> void:
 	for swatch in [swatch_blue, swatch_orange, swatch_green, swatch_purple]:
 		swatch.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	var color_title = _ensure_stat_label("ColorTitle", 20.0, 206.0, 180.0, 226.0, 12)
+	var color_title = _ensure_stat_label("ColorTitle", stat_left, 206.0, stat_right, 226.0, 12)
 	color_title.text = "Cor ativa"
 	_style_label(color_title, Color(0.77, 0.88, 0.99, 1.0))
-	color_value = _ensure_stat_label("ColorValue", 20.0, 226.0, 180.0, 252.0, 16)
+	color_value = _ensure_stat_label("ColorValue", stat_left, 226.0, stat_right, 252.0, 16)
 	_style_label(color_value, Color(0.95, 0.98, 1.0, 1.0))
 
-	money_value = _ensure_stat_label("MoneyValue", 20.0, 460.0, 180.0, 486.0, 18)
-	day_value = _ensure_stat_label("DayValue", 20.0, 498.0, 180.0, 524.0, 18)
-	streak_value = _ensure_stat_label("StreakValue", 20.0, 536.0, 180.0, 562.0, 18)
-	paint_value = _ensure_stat_label("PaintValue", 20.0, 574.0, 180.0, 600.0, 18)
-	risk_value = _ensure_stat_label("RiskValue", 20.0, 612.0, 180.0, 636.0, 15)
-	event_value = _ensure_stat_label("EventValue", 20.0, 638.0, 180.0, 662.0, 15)
+	paint_value = _ensure_stat_label("PaintValue", stat_left, 430.0, stat_right, 474.0, 16)
+	paint_value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	paint_value.text = "Rolo --\nBalde --"
+	money_value = _ensure_stat_label("MoneyValue", stat_left, 508.0, stat_right, 534.0, 18)
+	day_value = _ensure_stat_label("DayValue", stat_left, 562.0, stat_right, 588.0, 18)
+	streak_value = _ensure_stat_label("StreakValue", stat_left, 614.0, stat_right, 640.0, 18)
+	risk_value = _ensure_stat_label("RiskValue", stat_left, 646.0, 116.0, 666.0, 14)
+	event_value = _ensure_stat_label("EventValue", 122.0, 646.0, stat_right, 666.0, 14)
 
-	_ensure_stat_label("MoneyTitle", 20.0, 440.0, 180.0, 460.0, 12).text = "Creditos"
-	_ensure_stat_label("DayTitle", 20.0, 478.0, 180.0, 498.0, 12).text = "Dia da run"
-	_ensure_stat_label("StreakTitle", 20.0, 516.0, 180.0, 536.0, 12).text = "Streak"
-	_ensure_stat_label("PaintTitle", 20.0, 554.0, 180.0, 574.0, 12).text = "Tanque"
-	_ensure_stat_label("RiskTitle", 20.0, 592.0, 180.0, 612.0, 12).text = "Risco"
-	_ensure_stat_label("EventTitle", 20.0, 618.0, 180.0, 638.0, 12).text = "Evento"
+	_ensure_stat_label("PaintTitle", stat_left, 410.0, stat_right, 430.0, 12).text = "Tinta"
+	_ensure_stat_label("MoneyTitle", stat_left, 488.0, stat_right, 508.0, 12).text = "Creditos"
+	_ensure_stat_label("DayTitle", stat_left, 542.0, stat_right, 562.0, 12).text = "Dia da run"
+	_ensure_stat_label("StreakTitle", stat_left, 594.0, stat_right, 614.0, 12).text = "Streak"
+	_ensure_stat_label("RiskTitle", stat_left, 626.0, 116.0, 646.0, 12).text = "Risco"
+	_ensure_stat_label("EventTitle", 122.0, 626.0, stat_right, 646.0, 12).text = "Evento"
 	for title_name in ["MoneyTitle", "DayTitle", "StreakTitle", "PaintTitle", "RiskTitle", "EventTitle"]:
 		var title_label_node = sidebar.get_node_or_null(title_name)
 		if title_label_node and title_label_node is Label:
@@ -252,7 +270,7 @@ func _setup_ui() -> void:
 	for label in [money_value, day_value, streak_value, paint_value, risk_value, event_value]:
 		_style_label(label, Color(0.95, 0.98, 1.0, 1.0))
 
-	choice_panel = _ensure_panel("ChoicePanel", 288.0, 82.0, 1232.0, 632.0)
+	choice_panel = _ensure_panel("ChoicePanel", 310.0, 82.0, 1232.0, 622.0)
 	var choice_style = StyleBoxFlat.new()
 	choice_style.bg_color = Color(0.07, 0.10, 0.16, 0.93)
 	choice_style.border_color = Color(0.54, 0.73, 0.95, 0.55)
@@ -265,11 +283,11 @@ func _setup_ui() -> void:
 	choice_style.shadow_size = 12
 	choice_panel.add_theme_stylebox_override("panel", choice_style)
 	choice_panel.self_modulate = Color(1.0, 1.0, 1.0, 1.0)
-	choice_title = _ensure_panel_label(choice_panel, "ChoiceTitle", 24.0, 18.0, 910.0, 56.0, 24)
-	choice_body = _ensure_panel_label(choice_panel, "ChoiceBody", 24.0, 74.0, 910.0, 508.0, 13)
+	choice_title = _ensure_panel_label(choice_panel, "ChoiceTitle", 24.0, 18.0, 886.0, 56.0, 21)
+	choice_body = _ensure_panel_label(choice_panel, "ChoiceBody", 24.0, 74.0, 886.0, 478.0, 13)
 	choice_body.clip_text = true
 	choice_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	choice_hint = _ensure_panel_label(choice_panel, "ChoiceHint", 24.0, 516.0, 910.0, 546.0, 14)
+	choice_hint = _ensure_panel_label(choice_panel, "ChoiceHint", 24.0, 494.0, 886.0, 522.0, 14)
 	_style_label(choice_title, Color(0.93, 0.97, 1.0, 1.0), 2, Color(0.02, 0.04, 0.08, 0.92))
 	_style_label(choice_body, Color(0.87, 0.92, 0.98, 1.0))
 	_style_label(choice_hint, Color(0.74, 0.88, 1.0, 1.0))
@@ -412,6 +430,8 @@ func _set_selected_color(index: int) -> void:
 		wall.call("set_paint_color", selected_color)
 	if player.has_method("set_paint_color"):
 		player.call("set_paint_color", selected_color)
+	if bucket != null and bucket.has_method("set_tint"):
+		bucket.call("set_tint", selected_color)
 
 	_refresh_palette_visuals()
 
@@ -521,6 +541,8 @@ func _start_new_run() -> void:
 		player.call("apply_run_modifiers", _run_modifiers)
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
 
 	top_status.modulate = Color(1, 1, 1, 1)
 	_enter_contract_selection("Nova run iniciada. Escolha um contrato.")
@@ -540,6 +562,8 @@ func _enter_contract_selection(message: String) -> void:
 		player.call("set_game_active", false)
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
 
 	coverage_title.text = "Cobertura"
 	coverage_value.text = "--"
@@ -548,7 +572,7 @@ func _enter_contract_selection(message: String) -> void:
 	color_value.text = "--"
 	color_value.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	risk_value.text = "-"
-	event_value.text = "Planejando"
+	event_value.text = "Plano"
 
 	top_status.text = message
 	center_message.visible = false
@@ -608,6 +632,15 @@ func _start_contract() -> void:
 			wall_rect.position.x + (wall_rect.size.x * 0.5),
 			wall_rect.end.y + 96.0
 		)
+	var bucket_pos = Vector2(wall_rect.position.x - 52.0, wall_rect.end.y + 74.0)
+	if player.has_method("set_bucket"):
+		player.call("set_bucket", bucket_pos, 94.0)
+	if bucket != null:
+		bucket.global_position = bucket_pos
+		if bucket.has_method("set_active"):
+			bucket.call("set_active", true)
+		if bucket.has_method("set_fill_ratio"):
+			bucket.call("set_fill_ratio", 1.0)
 
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", true)
@@ -628,11 +661,13 @@ func _start_contract() -> void:
 	]
 	_set_selected_color(0)
 	_set_player_visible(true)
+	_set_bucket_visible(true)
+	_set_wall_drip_intensity(0.14)
 
 	_hide_choice_panel()
 	center_message.visible = true
 	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
-	center_message.text = "A/D anda no chao, W/S sobe o rolo. Teclas 1-4 trocam cor."
+	center_message.text = "A/D anda no chao | W/S sobe rolo | E recarrega no balde"
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -687,6 +722,15 @@ func _update_drops(delta: float) -> void:
 
 	var base_interval = float(_selected_contract.get("drop_interval", 0.52))
 	var spawn_interval = maxf(0.22, (base_interval * drop_interval_mult) / (pressure * event_spawn_mult))
+	var drip_level = clampf(
+		(pressure - 1.0) * 1.05
+		+ maxf(0.0, event_damage_mult - 1.0) * 0.92
+		+ maxf(0.0, event_spawn_mult - 1.0) * 0.64
+		+ minf(0.85, float(_drops.size()) / 180.0),
+		0.08,
+		1.8
+	)
+	_set_wall_drip_intensity(drip_level)
 
 	_drop_timer -= delta
 	while _drop_timer <= 0.0:
@@ -742,13 +786,13 @@ func _spawn_drop(wall_rect: Rect2, pressure: float, speed_mult: float, radius_mu
 func _update_event_system(delta: float) -> void:
 	if not _active_event.is_empty():
 		_active_event_time -= delta
-		event_value.text = "%s (%.1fs)" % [_active_event.get("name", "Evento"), maxf(0.0, _active_event_time)]
+		event_value.text = "%.1fs" % maxf(0.0, _active_event_time)
 		if _active_event_time <= 0.0:
 			_clear_active_event()
 		return
 
 	_event_timer -= delta
-	event_value.text = "Ceu instavel"
+	event_value.text = "Calmo"
 	if _event_timer > 0.0:
 		return
 
@@ -783,7 +827,7 @@ func _clear_active_event() -> void:
 	_active_event_time = 0.0
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
-	event_value.text = "Ceu limpo"
+	event_value.text = "Calmo"
 	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
 	center_message.text = "Continue o retoque."
 
@@ -802,11 +846,29 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 	time_value.text = "%.1fs" % remaining
 
 	var paint_ratio = 0.0
+	var bucket_ratio = 0.0
+	var refilling = false
 	if player.has_method("get_paint_ratio"):
 		paint_ratio = float(player.call("get_paint_ratio"))
-	paint_value.text = "%d%%" % int(round(paint_ratio * 100.0))
+	if player.has_method("get_bucket_ratio"):
+		bucket_ratio = float(player.call("get_bucket_ratio"))
+	if player.has_method("is_refilling"):
+		refilling = bool(player.call("is_refilling"))
+	paint_value.text = "Rolo %d%%\nBalde %d%%" % [
+		int(round(paint_ratio * 100.0)),
+		int(round(bucket_ratio * 100.0)),
+	]
+	if bucket != null and bucket.has_method("set_fill_ratio"):
+		bucket.call("set_fill_ratio", bucket_ratio)
 
 	risk_value.text = _selected_contract.get("risk_label", "-")
+	if _active_event.is_empty():
+		if refilling:
+			center_message.text = "Recarregando no balde..."
+		elif paint_ratio <= 0.08 and bucket_ratio <= 0.01:
+			center_message.text = "Sem tinta no rolo e balde vazio."
+		elif paint_ratio <= 0.20:
+			center_message.text = "Tanque baixo. Segure E ao lado do balde."
 	_update_sidebar_meta()
 
 
@@ -814,6 +876,8 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
 	_set_player_visible(false)
@@ -842,6 +906,8 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", false)
 	_set_player_visible(false)
@@ -893,6 +959,8 @@ func _enter_upgrade_selection() -> void:
 
 	_state = STATE_UPGRADE_SELECT
 	_set_player_visible(false)
+	_set_bucket_visible(false)
+	_set_wall_drip_intensity(0.0)
 	center_message.visible = false
 	_show_choice_panel()
 	choice_title.text = "Escolha Um Upgrade"
@@ -1043,12 +1111,14 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 
 func _format_contract(index: int, contract: Dictionary) -> String:
 	return (
-		"%d) %s | %s\n"
+		"%d) %s  [%s]\n"
+		+ "Cliente: %s\n"
 		+ "Tempo %.0fs | Meta %d%% | Ruina %d%% | C$%d"
 	) % [
 		index + 1,
 		contract.get("title", "Contrato"),
 		contract.get("risk_label", ""),
+		contract.get("client", "Cliente"),
 		float(contract.get("duration", 60.0)),
 		int(round(float(contract.get("target_coverage", 0.7)) * 100.0)),
 		int(round(float(contract.get("fail_coverage", 0.2)) * 100.0)),
@@ -1062,12 +1132,25 @@ func _set_player_visible(value: bool) -> void:
 		canvas_player.visible = value
 
 
+func _set_bucket_visible(value: bool) -> void:
+	if bucket != null and bucket is CanvasItem:
+		var bucket_canvas = bucket as CanvasItem
+		bucket_canvas.visible = value
+	if bucket != null and bucket.has_method("set_active"):
+		bucket.call("set_active", value)
+
+
+func _set_wall_drip_intensity(value: float) -> void:
+	if wall.has_method("set_drip_intensity"):
+		wall.call("set_drip_intensity", value)
+
+
 func _update_sidebar_meta() -> void:
 	money_value.text = "C$%d" % _money
 	day_value.text = "%d" % _run_day
 	streak_value.text = "%d" % _streak
 	if _state != STATE_IN_CONTRACT:
-		paint_value.text = "--"
+		paint_value.text = "Rolo --\nBalde --"
 
 
 func _apply_palette(base_color: Color) -> void:

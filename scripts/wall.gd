@@ -9,6 +9,10 @@ extends Node2D
 @export var grime_color: Color = Color(0.18, 0.21, 0.24, 0.15)
 @export var initial_min_coverage: float = 0.55
 @export var initial_max_coverage: float = 0.78
+@export var drip_start_coverage: float = 0.74
+@export var drip_rate: float = 0.34
+@export var drip_spread: float = 0.58
+@export var drip_loss_rate: float = 0.06
 
 var _columns: int = 0
 var _rows: int = 0
@@ -16,6 +20,8 @@ var _coverage: PackedFloat32Array = PackedFloat32Array()
 var _avg_coverage: float = 0.0
 var _lowest_coverage: float = 0.0
 var _anim_time: float = 0.0
+var _drip_intensity: float = 0.0
+var _damage_heat: float = 0.0
 
 
 func _ready() -> void:
@@ -26,6 +32,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_anim_time += delta
+	_damage_heat = maxf(0.0, _damage_heat - delta * 0.42)
+	_simulate_runoff(delta)
 	queue_redraw()
 
 
@@ -98,7 +106,14 @@ func paint_at(world_position: Vector2, radius: float, strength: float) -> bool:
 
 
 func damage_at(world_position: Vector2, radius: float, strength: float) -> bool:
-	return _affect_cells(world_position, radius, -strength)
+	var changed = _affect_cells(world_position, radius, -strength)
+	if changed:
+		_damage_heat = minf(1.4, _damage_heat + absf(strength) * 36.0)
+	return changed
+
+
+func set_drip_intensity(value: float) -> void:
+	_drip_intensity = clampf(value, 0.0, 1.8)
 
 
 func _setup_grid() -> void:
@@ -192,6 +207,83 @@ func _draw() -> void:
 
 	_draw_shine()
 	_draw_frame_details()
+
+
+func _simulate_runoff(delta: float) -> void:
+	if delta <= 0.0 or _rows <= 1 or _columns <= 0:
+		return
+
+	var flow_boost = clampf(_drip_intensity + (_damage_heat * 1.15), 0.0, 2.2)
+	var active_rate = drip_rate * (0.42 + flow_boost)
+	if active_rate <= 0.0:
+		return
+
+	var next_coverage: PackedFloat32Array = _coverage.duplicate()
+	var changed = false
+
+	for row in range(_rows - 2, -1, -1):
+		for col in range(_columns):
+			var index = row * _columns + col
+			var amount = next_coverage[index]
+			if amount <= drip_start_coverage:
+				continue
+
+			var excess = amount - drip_start_coverage
+			var runoff = minf(excess, active_rate * delta * (0.36 + excess))
+			if runoff <= 0.0001:
+				continue
+
+			var remain = runoff
+			var below_index = index + _columns
+			var below_capacity = maxf(0.0, 1.0 - next_coverage[below_index])
+			var down_bias = 0.72 + (flow_boost * 0.10)
+			var move_down = minf(remain, minf(remain * down_bias, below_capacity))
+			if move_down > 0.0:
+				next_coverage[index] -= move_down
+				next_coverage[below_index] += move_down
+				remain -= move_down
+				changed = true
+
+			if remain <= 0.0001:
+				continue
+
+			var side_targets: Array[int] = []
+			if col > 0:
+				side_targets.append(below_index - 1)
+			if col < _columns - 1:
+				side_targets.append(below_index + 1)
+
+			if not side_targets.is_empty():
+				var side_total = remain * drip_spread
+				var each = side_total / float(side_targets.size())
+				var moved_side = 0.0
+				for target in side_targets:
+					var cap = maxf(0.0, 1.0 - next_coverage[target])
+					var add = minf(each, cap)
+					if add <= 0.0:
+						continue
+					next_coverage[target] += add
+					moved_side += add
+					changed = true
+				if moved_side > 0.0:
+					next_coverage[index] -= moved_side
+
+	for col in range(_columns):
+		var bottom_index = (_rows - 1) * _columns + col
+		var bottom_amount = next_coverage[bottom_index]
+		if bottom_amount <= drip_start_coverage:
+			continue
+
+		var bottom_excess = bottom_amount - drip_start_coverage
+		var loss = minf(bottom_amount, drip_loss_rate * delta * bottom_excess * (0.42 + flow_boost))
+		if loss <= 0.0001:
+			continue
+		next_coverage[bottom_index] -= loss
+		changed = true
+
+	if changed:
+		_coverage = next_coverage
+		_recalculate_cache()
 
 
 func _draw_wall_base() -> void:

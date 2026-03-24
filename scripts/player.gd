@@ -4,9 +4,12 @@ extends CharacterBody2D
 @export var move_bounds: Rect2 = Rect2(260.0, 130.0, 820.0, 520.0)
 @export var base_paint_radius: float = 82.0
 @export var base_paint_strength_per_second: float = 6.5
-@export var base_paint_capacity: float = 270.0
+@export var base_paint_capacity: float = 220.0
 @export var base_paint_regen_per_second: float = 38.0
-@export var base_paint_drain_per_second: float = 5.0
+@export var base_paint_drain_per_second: float = 8.2
+@export var bucket_capacity_multiplier: float = 1.16
+@export var refill_efficiency: float = 0.88
+@export var refill_rate_per_second: float = 64.0
 
 @export var ground_offset_y: float = 96.0
 @export var horizontal_margin: float = 42.0
@@ -40,6 +43,11 @@ var _paint_regen: float = base_paint_regen_per_second
 var _paint_drain: float = base_paint_drain_per_second
 var _paint_amount: float = base_paint_capacity
 var _active_paint_color: Color = Color(0.35, 0.66, 0.95, 1.0)
+var _bucket_capacity: float = 0.0
+var _bucket_amount: float = 0.0
+var _bucket_world: Vector2 = Vector2.ZERO
+var _bucket_radius: float = 84.0
+var _is_refilling: bool = false
 
 var _anim_time: float = 0.0
 var _rest_positions: Dictionary = {}
@@ -52,6 +60,8 @@ var _facing: float = 1.0
 
 func _ready() -> void:
 	_paint_amount = _paint_capacity
+	_bucket_capacity = _paint_capacity * bucket_capacity_multiplier
+	_bucket_amount = _bucket_capacity
 	_ground_y = global_position.y
 	_roller_target_y = roller.position.y
 	for part in [torso, head, arm_left, arm_right, leg_left, leg_right, roller_arm]:
@@ -71,17 +81,30 @@ func set_game_active(value: bool) -> void:
 
 
 func apply_run_modifiers(modifiers: Dictionary) -> void:
+	var bucket_ratio = 1.0
+	if _bucket_capacity > 0.0:
+		bucket_ratio = _bucket_amount / _bucket_capacity
+
 	_speed = (base_speed + float(modifiers.get("speed_add", 0.0))) * float(modifiers.get("speed_mult", 1.0))
 	_paint_radius = (base_paint_radius + float(modifiers.get("paint_radius_add", 0.0))) * float(modifiers.get("paint_radius_mult", 1.0))
 	_paint_strength = (base_paint_strength_per_second + float(modifiers.get("paint_strength_add", 0.0))) * float(modifiers.get("paint_strength_mult", 1.0))
 	_paint_capacity = (base_paint_capacity + float(modifiers.get("paint_capacity_add", 0.0))) * float(modifiers.get("paint_capacity_mult", 1.0))
 	_paint_regen = (base_paint_regen_per_second + float(modifiers.get("paint_regen_add", 0.0))) * float(modifiers.get("paint_regen_mult", 1.0))
 	_paint_drain = (base_paint_drain_per_second + float(modifiers.get("paint_drain_add", 0.0))) * float(modifiers.get("paint_drain_mult", 1.0))
+	_bucket_capacity = _paint_capacity * bucket_capacity_multiplier
+	_bucket_amount = clampf(_bucket_capacity * bucket_ratio, 0.0, _bucket_capacity)
 	_paint_amount = clampf(_paint_amount, 0.0, _paint_capacity)
 
 
 func refill_paint() -> void:
 	_paint_amount = _paint_capacity
+	_bucket_capacity = _paint_capacity * bucket_capacity_multiplier
+	_bucket_amount = _bucket_capacity
+
+
+func set_bucket(bucket_position: Vector2, radius: float = 72.0) -> void:
+	_bucket_world = bucket_position
+	_bucket_radius = maxf(24.0, radius)
 
 
 func set_move_bounds_from_wall(wall_rect: Rect2) -> void:
@@ -119,8 +142,18 @@ func get_paint_ratio() -> float:
 	return _paint_amount / _paint_capacity
 
 
+func get_bucket_ratio() -> float:
+	if _bucket_capacity <= 0.0:
+		return 0.0
+	return _bucket_amount / _bucket_capacity
+
+
 func is_painting() -> bool:
 	return _is_painting
+
+
+func is_refilling() -> bool:
+	return _is_refilling
 
 
 func get_roller_position() -> Vector2:
@@ -135,6 +168,8 @@ func get_stat_snapshot() -> Dictionary:
 		"paint_capacity": _paint_capacity,
 		"paint_regen": _paint_regen,
 		"paint_drain": _paint_drain,
+		"bucket_capacity": _bucket_capacity,
+		"bucket_amount": _bucket_amount,
 	}
 
 
@@ -172,17 +207,28 @@ func _physics_process(delta: float) -> void:
 	roller.rotation = deg_to_rad(roller_input * 2.6)
 
 	_animate_body(move_x, roller_input, delta)
+	_is_refilling = false
+
+	var near_bucket = _bucket_world != Vector2.ZERO and global_position.distance_to(_bucket_world) <= _bucket_radius
+	var wants_refill = near_bucket and Input.is_key_pressed(KEY_E)
+	if wants_refill and _bucket_amount > 0.0 and _paint_amount < _paint_capacity:
+		var refill_speed = (_paint_regen * 1.35) + refill_rate_per_second
+		var refill_amount = minf(refill_speed * delta, _paint_capacity - _paint_amount, _bucket_amount * refill_efficiency)
+		if refill_amount > 0.0001:
+			var bucket_cost = refill_amount / maxf(0.1, refill_efficiency)
+			_paint_amount += refill_amount
+			_bucket_amount = maxf(0.0, _bucket_amount - bucket_cost)
+			_is_refilling = true
 
 	var did_paint = false
-	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0:
-		var paint_strength = _paint_strength * _external_paint_multiplier
+	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0 and not _is_refilling:
+		var tank_ratio = clampf(_paint_amount / maxf(1.0, _paint_capacity), 0.12, 1.0)
+		var paint_strength = _paint_strength * _external_paint_multiplier * tank_ratio
 		did_paint = bool(_wall.call("paint_at", foam.global_position, _paint_radius, paint_strength * delta))
 
 	if did_paint:
 		var paint_cost = _paint_drain * _external_drain_multiplier * delta
 		_paint_amount = maxf(0.0, _paint_amount - paint_cost)
-	else:
-		_paint_amount = minf(_paint_capacity, _paint_amount + (_paint_regen * delta))
 
 	_is_painting = did_paint
 	foam.modulate = _active_paint_color if _paint_amount > 5.0 else Color(0.45, 0.45, 0.45, 1.0)
