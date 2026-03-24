@@ -6,6 +6,7 @@ const STATE_UPGRADE_SELECT = 2
 const STATE_RUN_OVER = 3
 
 const SAVE_PATH = "user://meta_progress.json"
+const FOCUS_ZONE_BASE_RADIUS = 36.0
 
 const MULTIPLIER_KEYS = [
 	"speed_mult",
@@ -102,6 +103,16 @@ var _color_match_ratio: float = 1.0
 var _contract_pattern_mode: String = "solid"
 var _contract_pattern_colors: Array[int] = [0]
 var _contract_pattern_label: String = "Cor unica"
+var _flow_combo: float = 1.0
+var _flow_peak: float = 1.0
+var _run_peak_flow: float = 1.0
+var _focus_bonus_earned: int = 0
+var _focus_zone_active: bool = false
+var _focus_zone_world: Vector2 = Vector2.ZERO
+var _focus_zone_timer: float = 0.0
+var _focus_zone_duration: float = 0.0
+var _focus_zone_progress: float = 0.0
+var _focus_zone_cooldown: float = 0.0
 
 
 func _ready() -> void:
@@ -231,6 +242,24 @@ func _draw() -> void:
 			Color(1.0, 0.92, 0.58, 0.42 + pulse * 0.4),
 			2.2
 		)
+
+	if _state == STATE_IN_CONTRACT and _focus_zone_active:
+		var focus_local = to_local(_focus_zone_world)
+		var pulse = 0.5 + sin(_hud_time * 6.6) * 0.5
+		var timer_ratio = clampf(_focus_zone_timer / maxf(0.01, _focus_zone_duration), 0.0, 1.0)
+		var radius = FOCUS_ZONE_BASE_RADIUS + pulse * 4.0
+		var urgency = 1.0 - timer_ratio
+		draw_circle(focus_local, radius, Color(1.0, 0.32 + urgency * 0.22, 0.28, 0.13 + urgency * 0.24))
+		draw_arc(
+			focus_local,
+			radius + 6.0,
+			-PI * 0.5,
+			(-PI * 0.5) + TAU * _focus_zone_progress,
+			36,
+			Color(0.38, 0.94, 0.72, 0.88),
+			3.0
+		)
+		draw_circle(focus_local, 6.2 + pulse * 1.4, Color(1.0, 0.92, 0.72, 0.88))
 
 
 func _setup_ui() -> void:
@@ -721,6 +750,16 @@ func _start_new_run() -> void:
 	_run_credits_earned = 0
 	_total_contracts_completed = 0
 	_reputation = 1.0
+	_run_peak_flow = 1.0
+	_focus_bonus_earned = 0
+	_flow_combo = 1.0
+	_flow_peak = 1.0
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
 	_owned_upgrades.clear()
 	_run_modifiers = _base_modifiers()
 	_active_event.clear()
@@ -748,6 +787,11 @@ func _enter_contract_selection(message: String) -> void:
 	_active_event_time = 0.0
 	_drops.clear()
 	_splashes.clear()
+	_focus_zone_active = false
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
 	_contracts_offered = _generate_contract_offers()
 	_selected_contract = {}
 	_set_player_visible(false)
@@ -807,6 +851,14 @@ func _start_contract() -> void:
 	_active_event.clear()
 	_drops.clear()
 	_splashes.clear()
+	_flow_combo = 1.0
+	_flow_peak = 1.0
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 1.2
 	_apply_palette()
 	_palette = [
 		swatch_blue.color,
@@ -873,7 +925,7 @@ func _start_contract() -> void:
 		_selected_contract.get("title", "Sem nome"),
 		_contract_pattern_label,
 	]
-	center_message.text = "Pinte seguindo o padrao: %s." % _contract_pattern_label
+	center_message.text = "Pinte seguindo o padrao: %s. Salve os pontos criticos quando surgirem." % _contract_pattern_label
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -890,6 +942,7 @@ func _process_contract(delta: float) -> void:
 	var fail_threshold = clampf(float(_selected_contract.get("fail_coverage", 0.21)) + float(_run_modifiers.get("fail_offset", 0.0)), 0.05, 0.65)
 	if not _palette.is_empty():
 		_update_color_efficiency(_palette[_selected_color_index])
+	_update_flow_and_focus(delta)
 
 	_update_contract_hud(coverage, duration, target)
 	if player.has_method("is_painting") and bool(player.call("is_painting")) and player.has_method("get_roller_position"):
@@ -914,6 +967,106 @@ func _process_contract(delta: float) -> void:
 			_fail_run("Tempo acabou e o contrato ficou abaixo da meta.", coverage, lowest)
 		return
 
+	queue_redraw()
+
+
+func _update_flow_and_focus(delta: float) -> void:
+	var is_painting = player.has_method("is_painting") and bool(player.call("is_painting"))
+	var roller_pos = Vector2.ZERO
+	var has_roller_pos = false
+	if player.has_method("get_roller_position"):
+		roller_pos = player.call("get_roller_position")
+		has_roller_pos = true
+
+	if is_painting:
+		if _color_match_ratio >= 0.9:
+			_flow_combo += delta * 0.72
+		elif _color_match_ratio >= 0.72:
+			_flow_combo += delta * 0.34
+		elif _color_match_ratio <= 0.45:
+			_flow_combo -= delta * 1.28
+	else:
+		_flow_combo -= delta * 0.30
+
+	_flow_combo = clampf(_flow_combo, 1.0, 4.0)
+	_flow_peak = maxf(_flow_peak, _flow_combo)
+	_run_peak_flow = maxf(_run_peak_flow, _flow_peak)
+
+	if _focus_zone_active:
+		_focus_zone_timer -= delta
+		var in_focus = false
+		if is_painting and has_roller_pos:
+			var distance = roller_pos.distance_to(_focus_zone_world)
+			if distance <= FOCUS_ZONE_BASE_RADIUS + 8.0 and _color_match_ratio >= 0.7:
+				in_focus = true
+				var gain = delta * (0.62 + (_flow_combo * 0.18) + _color_match_ratio * 0.58)
+				_focus_zone_progress = minf(1.0, _focus_zone_progress + gain)
+				if _rng.randf() < delta * 10.0:
+					var paint_color = _palette[_selected_color_index] if not _palette.is_empty() else Color(0.35, 0.66, 0.95, 1.0)
+					_spawn_splash(
+						_focus_zone_world + Vector2(_rng.randf_range(-10.0, 10.0), _rng.randf_range(-8.0, 8.0)),
+						paint_color,
+						0.74
+					)
+		if not in_focus and is_painting and _color_match_ratio <= 0.45:
+			_focus_zone_progress = maxf(0.0, _focus_zone_progress - delta * 0.24)
+
+		if _focus_zone_progress >= 1.0:
+			_resolve_focus_zone(true)
+			return
+		if _focus_zone_timer <= 0.0:
+			_resolve_focus_zone(false)
+			return
+	else:
+		_focus_zone_cooldown -= delta
+		if _focus_zone_cooldown <= 0.0:
+			_spawn_focus_zone()
+
+
+func _spawn_focus_zone() -> void:
+	if not wall.has_method("get_lowest_cell_world_pos") or not wall.has_method("get_wall_rect_global"):
+		return
+
+	var candidate: Vector2 = wall.call("get_lowest_cell_world_pos")
+	var wall_rect: Rect2 = wall.call("get_wall_rect_global")
+	candidate.x = clampf(candidate.x + _rng.randf_range(-14.0, 14.0), wall_rect.position.x + 18.0, wall_rect.end.x - 18.0)
+	candidate.y = clampf(candidate.y + _rng.randf_range(-10.0, 10.0), wall_rect.position.y + 16.0, wall_rect.end.y - 16.0)
+
+	_focus_zone_world = candidate
+	_focus_zone_duration = _rng.randf_range(5.4, 8.0)
+	_focus_zone_timer = _focus_zone_duration
+	_focus_zone_progress = 0.0
+	_focus_zone_active = true
+	_focus_zone_cooldown = 0.0
+	center_message.text = "Ponto critico aberto: pinte dentro do circulo para evitar ruptura."
+	queue_redraw()
+
+
+func _resolve_focus_zone(success: bool) -> void:
+	if success:
+		var reward = int(round((18.0 + float(_run_day) * 4.0) * (0.88 + _flow_combo * 0.24)))
+		_money += reward
+		_run_credits_earned += reward
+		_focus_bonus_earned += reward
+		_flow_combo = minf(4.0, _flow_combo + 0.28)
+		_flow_peak = maxf(_flow_peak, _flow_combo)
+		_run_peak_flow = maxf(_run_peak_flow, _flow_peak)
+		_add_camera_shake(0.045)
+		center_message.text = "Ponto critico salvo! +C$%d" % reward
+		_focus_zone_cooldown = _rng.randf_range(3.2, 5.4)
+	else:
+		if wall.has_method("damage_at"):
+			wall.call("damage_at", _focus_zone_world, 44.0, 1.1)
+		_flow_combo = maxf(1.0, _flow_combo - 0.65)
+		_add_camera_shake(0.10)
+		center_message.text = "Ponto critico perdido. A parede sofreu dano!"
+		_focus_zone_cooldown = _rng.randf_range(2.8, 4.6)
+
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
 	queue_redraw()
 
 
@@ -1086,19 +1239,46 @@ func _update_contract_hud(coverage: float, duration: float, target: float) -> vo
 	_update_bar(roller_bar_fill, roller_bar_bg, paint_ratio, Color(0.28, 0.80, 0.94, 1.0))
 	_update_bar(bucket_bar_fill, bucket_bar_bg, bucket_ratio, Color(0.93, 0.67, 0.30, 1.0))
 
+	var flow_text = "Flow x%.1f" % _flow_combo
+	if _focus_zone_active:
+		top_status.text = "Contrato: %s | %s | Critico %d%%" % [
+			_selected_contract.get("title", "Sem nome"),
+			flow_text,
+			int(round(_focus_zone_progress * 100.0)),
+		]
+	elif _active_event.is_empty():
+		top_status.text = "Contrato: %s | %s" % [
+			_selected_contract.get("title", "Sem nome"),
+			flow_text,
+		]
+	else:
+		top_status.text = "Evento: %s | %s" % [
+			_active_event.get("name", "Clima hostil"),
+			flow_text,
+		]
+
 	risk_value.text = _selected_contract.get("risk_label", "-")
+	var has_priority_message = false
 	if _active_event.is_empty():
 		if _color_match_ratio <= 0.38:
 			center_message.text = "Cor errada para essa faixa. Troque a tinta."
+			has_priority_message = true
 		if refilling:
 			center_message.text = "Recarregando no balde..."
+			has_priority_message = true
 		elif paint_ratio <= 0.08 and bucket_ratio <= 0.01:
 			center_message.text = "Sem tinta no rolo e balde vazio."
 			_add_camera_shake(0.05)
+			has_priority_message = true
 		elif paint_ratio <= 0.20:
 			center_message.text = "Tanque baixo. Segure E ao lado do balde."
 			if int(floor(_hud_time * 2.0)) % 2 == 0:
 				_add_camera_shake(0.015)
+			has_priority_message = true
+		elif _focus_zone_active:
+			center_message.text = "Ponto critico em andamento: %d%%" % int(round(_focus_zone_progress * 100.0))
+		elif not has_priority_message and _flow_combo >= 2.35:
+			center_message.text = "Otimo ritmo! Flow alto aumenta seus ganhos."
 	_update_sidebar_meta()
 
 
@@ -1107,6 +1287,12 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
 	_set_bucket_visible(false)
 	_set_wall_drip_intensity(0.0)
 	if player.has_method("set_game_active"):
@@ -1116,8 +1302,9 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	var base_payout = int(_selected_contract.get("payout", 100))
 	var quality = clampf((coverage - target) * 2.4, 0.0, 0.9)
 	var stability_bonus = clampf((lowest - 0.25) * 0.8, 0.0, 0.35)
+	var flow_bonus = clampf((_flow_peak - 1.0) * 0.16, 0.0, 0.46)
 	var payout_scale = float(_run_modifiers.get("payout_mult", 1.0))
-	var payout = int(round(float(base_payout) * (1.0 + quality + stability_bonus) * payout_scale))
+	var payout = int(round(float(base_payout) * (1.0 + quality + stability_bonus + flow_bonus) * payout_scale))
 
 	_money += payout
 	_run_credits_earned += payout
@@ -1127,7 +1314,10 @@ func _complete_contract(coverage: float, target: float, lowest: float) -> void:
 	_run_day += 1
 	_add_camera_shake(0.10)
 
-	top_status.text = "Contrato entregue! +C$%d" % payout
+	top_status.text = "Contrato entregue! +C$%d (flow +%d%%)" % [
+		payout,
+		int(round(flow_bonus * 100.0)),
+	]
 	center_message.visible = false
 	center_message.text = ""
 	_enter_upgrade_selection()
@@ -1139,6 +1329,12 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 	_clear_active_event()
 	_drops.clear()
 	_splashes.clear()
+	_focus_zone_active = false
+	_focus_zone_world = Vector2.ZERO
+	_focus_zone_timer = 0.0
+	_focus_zone_duration = 0.0
+	_focus_zone_progress = 0.0
+	_focus_zone_cooldown = 0.0
 	_set_bucket_visible(false)
 	_set_wall_drip_intensity(0.0)
 	if player.has_method("set_game_active"):
@@ -1163,8 +1359,10 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 		"Motivo da queda: %s\n\n"
 		+ "Cobertura final: %d%%\n"
 		+ "Ponto mais fraco do muro: %d%%\n"
+		+ "Pico de flow: x%.1f\n"
 		+ "Streak atingida: %d\n"
 		+ "Contratos concluidos: %d\n"
+		+ "Bonus de pontos criticos: C$%d\n"
 		+ "Creditos na run: C$%d\n\n"
 		+ "Melhor streak global: %d\n"
 		+ "Runs totais: %d\n"
@@ -1173,8 +1371,10 @@ func _fail_run(reason: String, coverage: float, lowest: float) -> void:
 		reason,
 		int(round(coverage * 100.0)),
 		int(round(lowest * 100.0)),
+		_run_peak_flow,
 		_streak,
 		_total_contracts_completed,
+		_focus_bonus_earned,
 		_run_credits_earned,
 		_meta_best_streak,
 		_meta_total_runs,
