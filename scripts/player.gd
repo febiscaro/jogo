@@ -198,6 +198,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_W):
 		roller_input -= 1.0
 	roller_input = clampf(roller_input, -1.0, 1.0)
+	var mouse_target_y = clampf(get_global_mouse_position().y - _ground_y, _roller_min_y, _roller_max_y)
 
 	if absf(move_x) > 0.01:
 		_facing = sign(move_x)
@@ -208,13 +209,20 @@ func _physics_process(delta: float) -> void:
 	global_position.x = clampf(global_position.x, move_bounds.position.x, move_bounds.end.x)
 	global_position.y = _ground_y
 
-	_roller_target_y = clampf(_roller_target_y + (roller_input * roller_move_speed * delta), _roller_min_y, _roller_max_y)
+	if absf(roller_input) > 0.01:
+		_roller_target_y = clampf(_roller_target_y + (roller_input * roller_move_speed * delta), _roller_min_y, _roller_max_y)
+	else:
+		_roller_target_y = mouse_target_y
 	roller.position.y = move_toward(roller.position.y, _roller_target_y, roller_move_speed * 1.35 * delta)
 	roller.position.x = lerpf(roller.position.x, roller_x_offset * _facing, minf(1.0, delta * 14.0))
 	roller.scale.x = _facing
-	roller.rotation = deg_to_rad(roller_input * 2.6)
+	var roller_visual_input = roller_input
+	if absf(roller_visual_input) <= 0.01:
+		var visual_denominator = maxf(24.0, absf(_roller_max_y - _roller_min_y) * 0.35)
+		roller_visual_input = clampf((mouse_target_y - roller.position.y) / visual_denominator, -1.0, 1.0)
+	roller.rotation = deg_to_rad(roller_visual_input * 2.6)
 
-	_animate_body(move_x, roller_input, delta)
+	_animate_body(move_x, roller_visual_input, delta)
 	_is_refilling = false
 
 	var near_bucket = _bucket_world != Vector2.ZERO and global_position.distance_to(_bucket_world) <= _bucket_radius
