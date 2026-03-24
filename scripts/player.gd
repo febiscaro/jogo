@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 @export var base_speed: float = 300.0
 @export var move_bounds: Rect2 = Rect2(260.0, 130.0, 820.0, 520.0)
-@export var base_paint_radius: float = 24.0
+@export var base_paint_radius: float = 28.0
 @export var base_paint_strength_per_second: float = 6.5
 @export var base_paint_capacity: float = 220.0
 @export var base_paint_regen_per_second: float = 38.0
@@ -17,6 +17,8 @@ extends CharacterBody2D
 @export var roller_x_offset: float = 26.0
 @export var roller_top_margin: float = 10.0
 @export var roller_bottom_margin: float = 14.0
+@export var roller_free_margin: float = 22.0
+@export var roller_horizontal_reach: float = 132.0
 
 @onready var roller: Node2D = $Roller
 @onready var foam: Polygon2D = $Roller/Foam
@@ -54,8 +56,11 @@ var _is_refilling: bool = false
 var _anim_time: float = 0.0
 var _rest_positions: Dictionary = {}
 var _ground_y: float = 595.0
+var _roller_min_x: float = -132.0
+var _roller_max_x: float = 132.0
 var _roller_min_y: float = -490.0
 var _roller_max_y: float = -120.0
+var _roller_target_x: float = 26.0
 var _roller_target_y: float = -170.0
 var _facing: float = 1.0
 
@@ -65,6 +70,7 @@ func _ready() -> void:
 	_bucket_capacity = _paint_capacity * bucket_capacity_multiplier
 	_bucket_amount = _bucket_capacity
 	_ground_y = global_position.y
+	_roller_target_x = roller.position.x
 	_roller_target_y = roller.position.y
 	for part in [torso, head, arm_left, arm_right, leg_left, leg_right, roller_arm]:
 		if part != null:
@@ -89,7 +95,7 @@ func apply_run_modifiers(modifiers: Dictionary) -> void:
 
 	_speed = (base_speed + float(modifiers.get("speed_add", 0.0))) * float(modifiers.get("speed_mult", 1.0))
 	_paint_radius = (base_paint_radius + float(modifiers.get("paint_radius_add", 0.0))) * float(modifiers.get("paint_radius_mult", 1.0))
-	_paint_radius = clampf(_paint_radius, 16.0, 32.0)
+	_paint_radius = clampf(_paint_radius, 18.0, 38.0)
 	_paint_strength = (base_paint_strength_per_second + float(modifiers.get("paint_strength_add", 0.0))) * float(modifiers.get("paint_strength_mult", 1.0))
 	_paint_capacity = (base_paint_capacity + float(modifiers.get("paint_capacity_add", 0.0))) * float(modifiers.get("paint_capacity_mult", 1.0))
 	_paint_regen = (base_paint_regen_per_second + float(modifiers.get("paint_regen_add", 0.0))) * float(modifiers.get("paint_regen_mult", 1.0))
@@ -118,12 +124,16 @@ func set_move_bounds_from_wall(wall_rect: Rect2) -> void:
 	_ground_y = wall_rect.end.y + ground_offset_y
 	global_position.y = _ground_y
 
-	_roller_min_y = (wall_rect.position.y + roller_top_margin) - _ground_y
-	_roller_max_y = (wall_rect.end.y - roller_bottom_margin) - _ground_y
+	var top_reach = wall_rect.position.y + roller_top_margin - roller_free_margin
+	var bottom_reach = wall_rect.end.y - roller_bottom_margin + roller_free_margin
+	_roller_min_y = top_reach - _ground_y
+	_roller_max_y = bottom_reach - _ground_y
 	if _roller_max_y < _roller_min_y:
 		var temp = _roller_min_y
 		_roller_min_y = _roller_max_y
 		_roller_max_y = temp
+	_roller_min_x = -maxf(48.0, roller_horizontal_reach)
+	_roller_max_x = maxf(48.0, roller_horizontal_reach)
 	_apply_roller_limits()
 
 
@@ -192,13 +202,9 @@ func _physics_process(delta: float) -> void:
 		move_x -= 1.0
 	move_x = clampf(move_x, -1.0, 1.0)
 
-	var roller_input = Input.get_action_strength("ui_down") - Input.get_action_strength("ui_up")
-	if Input.is_key_pressed(KEY_S):
-		roller_input += 1.0
-	if Input.is_key_pressed(KEY_W):
-		roller_input -= 1.0
-	roller_input = clampf(roller_input, -1.0, 1.0)
-	var mouse_target_y = clampf(get_global_mouse_position().y - _ground_y, _roller_min_y, _roller_max_y)
+	var mouse_local = to_local(get_global_mouse_position())
+	var mouse_target_x = clampf(mouse_local.x, _roller_min_x, _roller_max_x)
+	var mouse_target_y = clampf(mouse_local.y, _roller_min_y, _roller_max_y)
 
 	if absf(move_x) > 0.01:
 		_facing = sign(move_x)
@@ -209,18 +215,15 @@ func _physics_process(delta: float) -> void:
 	global_position.x = clampf(global_position.x, move_bounds.position.x, move_bounds.end.x)
 	global_position.y = _ground_y
 
-	if absf(roller_input) > 0.01:
-		_roller_target_y = clampf(_roller_target_y + (roller_input * roller_move_speed * delta), _roller_min_y, _roller_max_y)
-	else:
-		_roller_target_y = mouse_target_y
+	_roller_target_x = mouse_target_x
+	_roller_target_y = mouse_target_y
 	roller.position.y = move_toward(roller.position.y, _roller_target_y, roller_move_speed * 1.35 * delta)
-	roller.position.x = lerpf(roller.position.x, roller_x_offset * _facing, minf(1.0, delta * 14.0))
-	roller.scale.x = _facing
-	var roller_visual_input = roller_input
-	if absf(roller_visual_input) <= 0.01:
-		var visual_denominator = maxf(24.0, absf(_roller_max_y - _roller_min_y) * 0.35)
-		roller_visual_input = clampf((mouse_target_y - roller.position.y) / visual_denominator, -1.0, 1.0)
-	roller.rotation = deg_to_rad(roller_visual_input * 2.6)
+	roller.position.x = move_toward(roller.position.x, _roller_target_x, roller_move_speed * 1.20 * delta)
+	roller.scale.x = sign(roller.position.x) if absf(roller.position.x) > 1.0 else _facing
+	var horizontal_ratio = clampf(roller.position.x / maxf(32.0, _roller_max_x), -1.0, 1.0)
+	roller.rotation = deg_to_rad(horizontal_ratio * 9.0)
+	var visual_denominator = maxf(24.0, absf(_roller_max_y - _roller_min_y) * 0.32)
+	var roller_visual_input = clampf((_roller_target_y - roller.position.y) / visual_denominator, -1.0, 1.0)
 
 	_animate_body(move_x, roller_visual_input, delta)
 	_is_refilling = false
@@ -309,5 +312,7 @@ func _rest_position(name: String, fallback: Vector2) -> Vector2:
 
 
 func _apply_roller_limits() -> void:
+	_roller_target_x = clampf(_roller_target_x, _roller_min_x, _roller_max_x)
 	_roller_target_y = clampf(_roller_target_y, _roller_min_y, _roller_max_y)
+	roller.position.x = _roller_target_x
 	roller.position.y = _roller_target_y
