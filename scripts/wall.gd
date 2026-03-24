@@ -205,12 +205,16 @@ func _draw() -> void:
 			tint = tint.lightened(noise * 0.22)
 			tint = tint.darkened((1.0 - coverage) * 0.08)
 
-			var cell_rect = Rect2(
-				Vector2(col * cell_size, row * cell_size),
-				Vector2(cell_size + 0.7, cell_size + 0.7)
-			)
+			var cell_pos = Vector2(float(col) * cell_size, float(row) * cell_size)
+			var cell_w = minf(cell_size, wall_size.x - cell_pos.x)
+			var cell_h = minf(cell_size, wall_size.y - cell_pos.y)
+			if cell_w <= 0.0 or cell_h <= 0.0:
+				continue
+
+			var cell_rect = Rect2(cell_pos, Vector2(cell_w, cell_h))
 			draw_rect(cell_rect, tint)
-			draw_rect(cell_rect, mortar_color, false, 1.0)
+			if cell_w > 2.0 and cell_h > 2.0:
+				draw_rect(cell_rect, mortar_color, false, 1.0)
 
 			if coverage < 0.28 and (col + row) % 2 == 0:
 				_draw_cell_cracks(cell_rect, coverage)

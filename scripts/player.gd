@@ -33,6 +33,8 @@ var _is_active: bool = true
 var _external_paint_multiplier: float = 1.0
 var _external_drain_multiplier: float = 1.0
 var _external_speed_multiplier: float = 1.0
+var _color_paint_multiplier: float = 1.0
+var _color_drain_multiplier: float = 1.0
 var _is_painting: bool = false
 
 var _speed: float = base_speed
@@ -136,6 +138,11 @@ func set_external_modifiers(speed_multiplier: float, paint_multiplier: float, dr
 	_external_drain_multiplier = maxf(0.1, drain_multiplier)
 
 
+func set_color_efficiency(paint_multiplier: float, drain_multiplier: float) -> void:
+	_color_paint_multiplier = maxf(0.4, paint_multiplier)
+	_color_drain_multiplier = maxf(0.5, drain_multiplier)
+
+
 func get_paint_ratio() -> float:
 	if _paint_capacity <= 0.0:
 		return 0.0
@@ -223,11 +230,11 @@ func _physics_process(delta: float) -> void:
 	var did_paint = false
 	if _wall and _wall.has_method("paint_at") and _paint_amount > 0.0 and not _is_refilling:
 		var tank_ratio = clampf(_paint_amount / maxf(1.0, _paint_capacity), 0.12, 1.0)
-		var paint_strength = _paint_strength * _external_paint_multiplier * tank_ratio
+		var paint_strength = _paint_strength * _external_paint_multiplier * _color_paint_multiplier * tank_ratio
 		did_paint = bool(_wall.call("paint_at", foam.global_position, _paint_radius, paint_strength * delta))
 
 	if did_paint:
-		var paint_cost = _paint_drain * _external_drain_multiplier * delta
+		var paint_cost = _paint_drain * _external_drain_multiplier * _color_drain_multiplier * delta
 		_paint_amount = maxf(0.0, _paint_amount - paint_cost)
 
 	_is_painting = did_paint

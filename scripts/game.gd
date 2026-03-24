@@ -96,6 +96,8 @@ var _meta_total_runs: int = 0
 var _meta_total_credits: int = 0
 var _base_scene_position: Vector2 = Vector2.ZERO
 var _camera_shake_strength: float = 0.0
+var _contract_target_color: Color = Color(0.31, 0.62, 0.90, 1.0)
+var _color_match_ratio: float = 1.0
 
 
 func _ready() -> void:
@@ -483,6 +485,7 @@ func _color_index_from_key(keycode: int) -> int:
 
 
 func _capture_palette() -> void:
+	_apply_palette()
 	_palette = [
 		swatch_blue.color,
 		swatch_orange.color,
@@ -505,9 +508,6 @@ func _set_selected_color(index: int) -> void:
 		return
 	_selected_color_index = clampi(index, 0, _palette.size() - 1)
 	var selected_color = _palette[_selected_color_index]
-	if color_value != null:
-		color_value.text = _get_palette_name(_selected_color_index)
-		color_value.modulate = selected_color
 
 	if wall.has_method("set_paint_color"):
 		wall.call("set_paint_color", selected_color)
@@ -515,6 +515,7 @@ func _set_selected_color(index: int) -> void:
 		player.call("set_paint_color", selected_color)
 	if bucket != null and bucket.has_method("set_tint"):
 		bucket.call("set_tint", selected_color)
+	_update_color_efficiency(selected_color)
 
 	_refresh_palette_visuals()
 
@@ -541,6 +542,69 @@ func _get_palette_name(index: int) -> String:
 		3:
 			return "Roxo"
 	return "Cor"
+
+
+func _get_palette_colors() -> Array[Color]:
+	return [
+		Color(0.31, 0.62, 0.90, 1.0),
+		Color(0.94, 0.57, 0.25, 1.0),
+		Color(0.24, 0.74, 0.50, 1.0),
+		Color(0.67, 0.45, 0.88, 1.0),
+	]
+
+
+func _nearest_palette_index_for_color(color: Color) -> int:
+	var colors = _palette if not _palette.is_empty() else _get_palette_colors()
+	var best_index = 0
+	var best_distance = INF
+	for i in range(colors.size()):
+		var c = colors[i]
+		var dr = c.r - color.r
+		var dg = c.g - color.g
+		var db = c.b - color.b
+		var dist = (dr * dr) + (dg * dg) + (db * db)
+		if dist < best_distance:
+			best_distance = dist
+			best_index = i
+	return best_index
+
+
+func _palette_name_for_color(color: Color) -> String:
+	return _get_palette_name(_nearest_palette_index_for_color(color))
+
+
+func _update_color_efficiency(selected_color: Color) -> void:
+	if _state != STATE_IN_CONTRACT:
+		_color_match_ratio = 1.0
+		if player.has_method("set_color_efficiency"):
+			player.call("set_color_efficiency", 1.0, 1.0)
+		if color_value != null:
+			color_value.text = _get_palette_name(_selected_color_index)
+			color_value.modulate = selected_color
+		return
+
+	var dr = selected_color.r - _contract_target_color.r
+	var dg = selected_color.g - _contract_target_color.g
+	var db = selected_color.b - _contract_target_color.b
+	var dist = sqrt((dr * dr) + (dg * dg) + (db * db))
+	_color_match_ratio = clampf(1.0 - (dist / 1.15), 0.0, 1.0)
+
+	var paint_mult = lerpf(0.66, 1.20, _color_match_ratio)
+	var drain_mult = lerpf(1.38, 0.84, _color_match_ratio)
+	if player.has_method("set_color_efficiency"):
+		player.call("set_color_efficiency", paint_mult, drain_mult)
+
+	var match_label = "Fraca"
+	if _color_match_ratio >= 0.9:
+		match_label = "Perfeita"
+	elif _color_match_ratio >= 0.68:
+		match_label = "Boa"
+	elif _color_match_ratio >= 0.45:
+		match_label = "Aceitavel"
+
+	if color_value != null:
+		color_value.text = "%s (%s)" % [_get_palette_name(_selected_color_index), match_label]
+		color_value.modulate = selected_color
 
 
 func _update_splashes(delta: float) -> void:
@@ -698,9 +762,19 @@ func _start_contract() -> void:
 	_active_event.clear()
 	_drops.clear()
 	_splashes.clear()
+	_apply_palette()
+	_palette = [
+		swatch_blue.color,
+		swatch_orange.color,
+		swatch_green.color,
+		swatch_purple.color,
+	]
+	var contract_color_raw: Color = _selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0))
+	var target_index = _nearest_palette_index_for_color(contract_color_raw)
+	_contract_target_color = _palette[target_index]
 
 	var config = {
-		"paint_color": _selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0)),
+		"paint_color": _contract_target_color,
 		"initial_min_coverage": _selected_contract.get("initial_min", 0.54),
 		"initial_max_coverage": _selected_contract.get("initial_max", 0.72),
 	}
@@ -737,23 +811,18 @@ func _start_contract() -> void:
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
 
-	var contract_color: Color = _selected_contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0))
-	_apply_palette(contract_color)
-	_palette = [
-		swatch_blue.color,
-		swatch_orange.color,
-		swatch_green.color,
-		swatch_purple.color,
-	]
-	_set_selected_color(0)
+	_set_selected_color(target_index)
 	_set_player_visible(true)
 	_set_bucket_visible(true)
 	_set_wall_drip_intensity(0.14)
 
 	_hide_choice_panel()
 	center_message.visible = true
-	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
-	center_message.text = "A/D anda no chao | W/S sobe rolo | E recarrega no balde"
+	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+		_selected_contract.get("title", "Sem nome"),
+		_palette_name_for_color(_contract_target_color),
+	]
+	center_message.text = "Cor alvo %s: combina melhor, cobre mais e gasta menos." % _palette_name_for_color(_contract_target_color)
 	_update_sidebar_meta()
 	queue_redraw()
 
@@ -920,7 +989,10 @@ func _clear_active_event() -> void:
 	if player.has_method("set_external_modifiers"):
 		player.call("set_external_modifiers", 1.0, 1.0, 1.0)
 	event_value.text = "Calmo"
-	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
+	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+		_selected_contract.get("title", "Sem nome"),
+		_palette_name_for_color(_contract_target_color),
+	]
 	center_message.text = "Continue o retoque."
 
 
@@ -1214,15 +1286,17 @@ func _roll_contract(template: Dictionary) -> Dictionary:
 
 
 func _format_contract(index: int, contract: Dictionary) -> String:
+	var target_color_name = _palette_name_for_color(contract.get("paint_color", Color(0.31, 0.62, 0.90, 1.0)))
 	return (
 		"%d) %s  [%s]\n"
-		+ "Cliente: %s\n"
+		+ "Cliente: %s | Cor alvo: %s\n"
 		+ "Tempo %.0fs | Meta %d%% | Ruina %d%% | C$%d"
 	) % [
 		index + 1,
 		contract.get("title", "Contrato"),
 		contract.get("risk_label", ""),
 		contract.get("client", "Cliente"),
+		target_color_name,
 		float(contract.get("duration", 60.0)),
 		int(round(float(contract.get("target_coverage", 0.7)) * 100.0)),
 		int(round(float(contract.get("fail_coverage", 0.2)) * 100.0)),
@@ -1270,7 +1344,10 @@ func _resume_contract() -> void:
 	if player.has_method("set_game_active"):
 		player.call("set_game_active", true)
 	_hide_choice_panel()
-	top_status.text = "Contrato ativo: %s" % _selected_contract.get("title", "Sem nome")
+	top_status.text = "Contrato ativo: %s | Cor alvo: %s" % [
+		_selected_contract.get("title", "Sem nome"),
+		_palette_name_for_color(_contract_target_color),
+	]
 	center_message.visible = true
 	center_message.text = _active_event.get("description", "Continue o retoque.") if not _active_event.is_empty() else "Continue o retoque."
 
@@ -1303,11 +1380,12 @@ func _update_sidebar_meta() -> void:
 		_update_bar(bucket_bar_fill, bucket_bar_bg, 0.0, Color(0.93, 0.67, 0.30, 1.0))
 
 
-func _apply_palette(base_color: Color) -> void:
-	swatch_blue.color = base_color
-	swatch_orange.color = Color(0.94, 0.57, 0.25, 1.0)
-	swatch_green.color = Color(0.24, 0.74, 0.50, 1.0)
-	swatch_purple.color = Color(0.67, 0.45, 0.88, 1.0)
+func _apply_palette() -> void:
+	var colors = _get_palette_colors()
+	swatch_blue.color = colors[0]
+	swatch_orange.color = colors[1]
+	swatch_green.color = colors[2]
+	swatch_purple.color = colors[3]
 
 
 func _base_modifiers() -> Dictionary:
