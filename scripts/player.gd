@@ -213,7 +213,7 @@ func _physics_process(delta: float) -> void:
 	var wants_refill = near_bucket and Input.is_key_pressed(KEY_E)
 	if wants_refill and _bucket_amount > 0.0 and _paint_amount < _paint_capacity:
 		var refill_speed = (_paint_regen * 1.35) + refill_rate_per_second
-		var refill_amount = minf(refill_speed * delta, _paint_capacity - _paint_amount, _bucket_amount * refill_efficiency)
+		var refill_amount = minf(refill_speed * delta, minf(_paint_capacity - _paint_amount, _bucket_amount * refill_efficiency))
 		if refill_amount > 0.0001:
 			var bucket_cost = refill_amount / maxf(0.1, refill_efficiency)
 			_paint_amount += refill_amount
